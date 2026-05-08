@@ -1,0 +1,4 @@
+name = "DiscoG3D"
+uuid = "8d9d5e72-6b9d-4d6a-8e7a-2f4c7d6b1a31"
+authors = ["Martí Circuns-Duxans <marti.circuns@bsc.es>"]
+version = "0.1.0"
