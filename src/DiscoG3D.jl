@@ -15,69 +15,104 @@ export RawVTUMesh,
 
 
 # Topology
-export build_dg_topology,
+export FaceRef,
+       InteriorFace,
+       BoundaryFace,
+       DGTopology,
+       build_dg_topology,
        print_topology_summary
 
 
 # Geometry
-export build_dg_geometry,
+export FaceGeometry,
+       CellGeometry,
+       DGGeometry,
+       build_dg_geometry,
        print_geometry_summary
 
 
 # Metrics
-export build_reference_mappings,
-        print_mapping_summary
+export TetMapping,
+       DGReferenceMapping,
+       build_reference_mappings,
+       print_mapping_summary,
+       reference_gradient_to_physical,
+       physical_shape_gradients
 
-# Nodal basis
-export build_reference_tet,
-        print_reference_tet_summary,
-        print_orthonormal_basis_summary,
-        build_reference_face_operators,
-        print_reference_face_operator_summary,
-        build_reference_tri,
-        print_reference_tri_summary
+# Reference tetrahedron
+export OrthonormalTetBasis,
+       ReferenceTet,
+       TriangleQuadrature,
+       build_reference_tet,
+       print_reference_tet_summary,
+       print_orthonormal_basis_summary,
+       num_tet_nodes,
+       equispaced_tet_nodes
 
+# Reference triangle
+export ReferenceTri,
+       OrthonormalTriBasis,
+       build_reference_tri,
+       print_reference_tri_summary
 
-# Physical operators 
+# Face operators
+export ReferenceTetFaceOperators,
+       build_reference_face_operators,
+       print_reference_face_operator_summary,
+       reference_face_nodes
+
+# Physical operators
 export build_physical_operators,
-        print_physical_operator_summary,
-        test_physical_derivatives_linear
+       print_physical_operator_summary,
+       test_physical_derivatives_linear
 
-
-# Trace maps and face-node permutations
+# Trace maps
 export build_dg_trace_maps,
-        print_trace_map_summary,
-        test_trace_map_geometry,
-        test_trace_maps_linear_function
+       print_trace_map_summary,
+       test_trace_map_geometry,
+       test_trace_maps_linear_function
 
-# Flux
+# Flux faces
 export build_dg_flux_faces,
-        print_flux_face_summary,
-        test_interior_flux_face_normals,
-        test_boundary_box_normals,
-        test_pec_sphere_normals,
-        print_boundary_area_reference_check
+       print_flux_face_summary,
+       test_interior_flux_face_normals,
+       test_boundary_box_normals,
+       test_pec_sphere_normals,
+       print_boundary_area_reference_check
 
 # Scalar advection
 export test_scalar_advection_volume_operator,
-        test_scalar_advection_interior_surface_operator,
-        test_scalar_advection_boundary_surface_operator,
-        test_scalar_advection_full_surface_operator
+       test_scalar_advection_interior_surface_operator,
+       test_scalar_advection_boundary_surface_operator,
+       test_scalar_advection_full_surface_operator
 
+# Maxwell
+export MaxwellField,
+       MaxwellRHS,
+       MaxwellBoundaryKind,
+       MaxwellBoundaryRegistry,
+       default_maxwell_boundary_registry,
+       empty_maxwell_boundary_registry,
+       interpolate_maxwell_field,
+       maxwell_rhs!,
+       maxwell_volume_rhs!,
+       maxwell_energy,
+       maxwell_energy_rate,
+       run_maxwell_time_steps!
 
-# Maxwell 
+# Maxwell tests / diagnostics
 export test_maxwell_pec_boundary_reflection,
-        test_maxwell_volume_operator,
-        test_maxwell_interior_surface_operator,
-        test_maxwell_pec_local_flux_zero,
-        test_maxwell_pec_boundary_surface_zero_field,
-        test_maxwell_pec_boundary_surface_arbitrary_field,
-        test_maxwell_rhs_matches_volume_without_boundaries,
-        test_maxwell_rhs_zero_field_with_pec,
-        test_maxwell_rhs_linear_field_no_boundaries,
-        test_maxwell_energy_constant_field,
-        test_maxwell_energy_rate_zero_field,
-        test_maxwell_energy_rate_no_boundaries
+       test_maxwell_volume_operator,
+       test_maxwell_interior_surface_operator,
+       test_maxwell_pec_local_flux_zero,
+       test_maxwell_pec_boundary_surface_zero_field,
+       test_maxwell_pec_boundary_surface_arbitrary_field,
+       test_maxwell_rhs_matches_volume_without_boundaries,
+       test_maxwell_rhs_zero_field_with_pec,
+       test_maxwell_rhs_linear_field_no_boundaries,
+       test_maxwell_energy_constant_field,
+       test_maxwell_energy_rate_zero_field,
+       test_maxwell_energy_rate_no_boundaries
 
 
 # Time-scheme 
@@ -85,6 +120,24 @@ export explicit_rk_scheme,
         print_rk_scheme_summary,
         test_rk_zero_field_step,
         test_rk_one_step_energy_diagnostic
+
+# Periodic
+export default_unit_box_periodic_specs,
+        build_periodic_flux_faces,
+        print_periodic_flux_face_summary,
+        test_periodic_flux_face_geometry,
+        test_periodic_trace_maps_scalar_function,
+        test_maxwell_periodic_rhs_zero_field,
+        test_rk_periodic_zero_field_step,
+        test_rk_periodic_one_step_energy_diagnostic,
+        estimate_maxwell_dt,
+        print_element_size_diagnostics,
+        print_maxwell_dt_estimate,
+        test_periodic_time_marching_with_cfl_dt,
+        test_maxwell_upwind_interior_surface_operator,
+        test_maxwell_upwind_periodic_surface_operator,
+        test_maxwell_upwind_periodic_rhs_zero_field,
+        test_maxwell_upwind_periodic_rhs_zero_field
 
 
 
@@ -1962,50 +2015,50 @@ end
 #     return nothing
 # end
 
-function print_reference_face_operator_summary(ref::ReferenceTet, fops::ReferenceTetFaceOperators)
-    println("Reference face operators")
-    println("------------------------")
+# function print_reference_face_operator_summary(ref::ReferenceTet, fops::ReferenceTetFaceOperators)
+#     println("Reference face operators")
+#     println("------------------------")
 
-    expected_nfp = (ref.N + 1) * (ref.N + 2) ÷ 2
+#     expected_nfp = (ref.N + 1) * (ref.N + 2) ÷ 2
 
-    println("Polynomial order N:       ", ref.N)
-    println("Nodes per face Nfp:       ", expected_nfp)
+#     println("Polynomial order N:       ", ref.N)
+#     println("Nodes per face Nfp:       ", expected_nfp)
 
-    for f in 1:4
-        println("Face $f node count:        ", length(fops.face_nodes[f]))
-    end
+#     for f in 1:4
+#         println("Face $f node count:        ", length(fops.face_nodes[f]))
+#     end
 
-    println()
-    println("Reference face areas from face mass")
-    println("-----------------------------------")
+#     println()
+#     println("Reference face areas from face mass")
+#     println("-----------------------------------")
 
-    ones_vec = ones(ref.Np)
+#     ones_vec = ones(ref.Np)
 
-    for f in 1:4
-        triq = triangle_quadrature_gauss(2 * ref.N)
-        _, _, _, wq = reference_face_quadrature(f, triq)
-        println("Face $f area:              ", sum(wq))
-    end
+#     for f in 1:4
+#         triq = triangle_quadrature_gauss(2 * ref.N)
+#         _, _, _, wq = reference_face_quadrature(f, triq)
+#         println("Face $f area:              ", sum(wq))
+#     end
 
-    println()
-    println("Operator sizes")
-    println("--------------")
-    println("size(Emat):              ", size(fops.Emat))
-    println("size(LIFT):              ", size(fops.LIFT))
+#     println()
+#     println("Operator sizes")
+#     println("--------------")
+#     println("size(Emat):              ", size(fops.Emat))
+#     println("size(LIFT):              ", size(fops.LIFT))
 
-    println()
-    println("Operator checks")
-    println("---------------")
-    println("||Emat - Emat'||:        ", norm(fops.Emat - fops.Emat'))
-    println("||LIFT||:                ", norm(fops.LIFT))
+#     println()
+#     println("Operator checks")
+#     println("---------------")
+#     println("||Emat - Emat'||:        ", norm(fops.Emat - fops.Emat'))
+#     println("||LIFT||:                ", norm(fops.LIFT))
 
-    surface_area_total = dot(ones_vec, fops.Emat * ones_vec)
+#     surface_area_total = dot(ones_vec, fops.Emat * ones_vec)
 
-    println("Total reference surface area from Emat: ", surface_area_total)
-    println("Expected total reference surface area:  ", 6.0 + 2.0 * sqrt(3.0))
+#     println("Total reference surface area from Emat: ", surface_area_total)
+#     println("Expected total reference surface area:  ", 6.0 + 2.0 * sqrt(3.0))
 
-    return nothing
-end
+#     return nothing
+# end
 
 # -------------------------------------------------------------------------
 # FACE STUFF Hesthaven & Warburton approach
@@ -6239,6 +6292,2100 @@ function run_maxwell_time_steps!(
     return U
 end
 
+# -------------------------------------------------------------------------
+# Periodic boundary trace maps
+# -------------------------------------------------------------------------
+
+struct PeriodicBoundarySpec
+    minus_boundary_id::Int
+    plus_boundary_id::Int
+
+    # Maps plus-side physical coordinates into minus-side coordinates.
+    # Example: xmax -> xmin uses (-Lx, 0, 0).
+    plus_to_minus_shift::NTuple{3, Float64}
+
+    name::Symbol
+end
+
+
+struct PeriodicTraceMap
+    minus_elem::Int
+    minus_face::Int
+    minus_boundary_id::Int
+    minus_nodes::Vector{Int}
+
+    plus_elem::Int
+    plus_face::Int
+    plus_boundary_id::Int
+    plus_nodes::Vector{Int}
+
+    # plus_nodes[plus_to_minus_perm] is ordered like minus_nodes
+    # after applying plus_to_minus_shift to the plus coordinates.
+    plus_to_minus_perm::Vector{Int}
+
+    plus_to_minus_shift::NTuple{3, Float64}
+end
+
+
+struct PeriodicFluxFace
+    trace::PeriodicTraceMap
+
+    # Normal is outward from the minus element/domain side.
+    normal::NTuple{3, Float64}
+
+    area::Float64
+    centroid::NTuple{3, Float64}
+
+    name::Symbol
+end
+
+
+struct DGPeriodicFluxFaces
+    faces::Vector{PeriodicFluxFace}
+end
+
+# Default periodic specs for the unit box
+function default_unit_box_periodic_specs()
+    return (
+        PeriodicBoundarySpec(1, 2, (-1.0, 0.0, 0.0), :x_periodic),
+        PeriodicBoundarySpec(3, 4, (0.0, -1.0, 0.0), :y_periodic),
+        PeriodicBoundarySpec(5, 6, (0.0, 0.0, -1.0), :z_periodic),
+    )
+end
+
+function box_periodic_specs(Lx::Float64, Ly::Float64, Lz::Float64)
+    return (
+        PeriodicBoundarySpec(1, 2, (-Lx, 0.0, 0.0), :x_periodic),
+        PeriodicBoundarySpec(3, 4, (0.0, -Ly, 0.0), :y_periodic),
+        PeriodicBoundarySpec(5, 6, (0.0, 0.0, -Lz), :z_periodic),
+    )
+end
+
+# Small vector helps
+function shift_point(
+    p::NTuple{3, Float64},
+    shift::NTuple{3, Float64},
+)
+    return (
+        p[1] + shift[1],
+        p[2] + shift[2],
+        p[3] + shift[3],
+    )
+end
+
+# Group boundary fluxes by boundary id 
+function boundary_flux_faces_by_id(flux_faces::DGFluxFaces)
+    groups = Dict{Int, Vector{Int}}()
+
+    for i in eachindex(flux_faces.boundary)
+        bid = flux_faces.boundary[i].boundary_id
+
+        if !haskey(groups, bid)
+            groups[bid] = Int[]
+        end
+
+        push!(groups[bid], i)
+    end
+
+    return groups
+end
+
+# Match one minus boundary face to one plus boundary face
+function match_periodic_partner(
+    minus_face::BoundaryFluxFace,
+    plus_faces::Vector{BoundaryFluxFace},
+    used_plus::AbstractVector{Bool},
+    shift::NTuple{3, Float64};
+    tol::Float64 = 1e-10,
+)
+    best_j = 0
+    best_d2 = Inf
+
+    for j in eachindex(plus_faces)
+        if used_plus[j]
+            continue
+        end
+
+        shifted_plus_centroid = shift_point(plus_faces[j].centroid, shift)
+        d2 = squared_distance(minus_face.centroid, shifted_plus_centroid)
+
+        if d2 < best_d2
+            best_d2 = d2
+            best_j = j
+        end
+    end
+
+    if best_j == 0 || best_d2 > tol^2
+        error(
+            "Could not find periodic partner for boundary face with centroid " *
+            "$(minus_face.centroid). Best squared distance = $best_d2, " *
+            "tolerance squared = $(tol^2)."
+        )
+    end
+
+    used_plus[best_j] = true
+
+    return best_j
+end
+
+# Match face-node permutation with periodic shift 
+function match_periodic_face_node_permutation(
+    minus_points::Vector{NTuple{3, Float64}},
+    plus_points::Vector{NTuple{3, Float64}},
+    shift::NTuple{3, Float64};
+    tol::Float64 = 1e-10,
+)
+    shifted_plus_points = [
+        shift_point(p, shift) for p in plus_points
+    ]
+
+    return match_face_node_permutation(
+        minus_points,
+        shifted_plus_points;
+        tol = tol,
+    )
+end
+
+# Build periodic fluxes 
+function build_periodic_flux_faces(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    flux_faces::DGFluxFaces,
+    specs;
+    centroid_tol::Float64 = 1e-9,
+    node_tol::Float64 = 1e-9,
+    area_rtol::Float64 = 1e-10,
+)
+    groups = boundary_flux_faces_by_id(flux_faces)
+
+    periodic_faces = PeriodicFluxFace[]
+
+    for spec in specs
+        minus_ids = get(groups, spec.minus_boundary_id, Int[])
+        plus_ids = get(groups, spec.plus_boundary_id, Int[])
+
+        if length(minus_ids) != length(plus_ids)
+            error(
+                "Periodic pair $(spec.name) has incompatible face counts: " *
+                "boundary_id $(spec.minus_boundary_id) has $(length(minus_ids)) faces, " *
+                "boundary_id $(spec.plus_boundary_id) has $(length(plus_ids)) faces. " *
+                "The mesh is not periodic-compatible for this pair."
+            )
+        end
+
+        minus_faces = flux_faces.boundary[minus_ids]
+        plus_faces = flux_faces.boundary[plus_ids]
+
+        used_plus = falses(length(plus_faces))
+
+        for i in eachindex(minus_faces)
+            mf = minus_faces[i]
+
+            j = match_periodic_partner(
+                mf,
+                plus_faces,
+                used_plus,
+                spec.plus_to_minus_shift;
+                tol = centroid_tol,
+            )
+
+            pf = plus_faces[j]
+
+            # Area compatibility check.
+            area_error = abs(mf.area - pf.area)
+            area_scale = max(abs(mf.area), abs(pf.area), eps(Float64))
+
+            if area_error / area_scale > area_rtol
+                error(
+                    "Periodic face area mismatch for $(spec.name): " *
+                    "minus area = $(mf.area), plus area = $(pf.area), " *
+                    "relative error = $(area_error / area_scale)."
+                )
+            end
+
+            minus_points = physical_face_points(
+                mesh,
+                ref,
+                mf.trace.elem,
+                mf.trace.nodes,
+            )
+
+            plus_points = physical_face_points(
+                mesh,
+                ref,
+                pf.trace.elem,
+                pf.trace.nodes,
+            )
+
+            perm = match_periodic_face_node_permutation(
+                minus_points,
+                plus_points,
+                spec.plus_to_minus_shift;
+                tol = node_tol,
+            )
+
+            tr = PeriodicTraceMap(
+                mf.trace.elem,
+                mf.trace.face,
+                mf.boundary_id,
+                copy(mf.trace.nodes),
+
+                pf.trace.elem,
+                pf.trace.face,
+                pf.boundary_id,
+                copy(pf.trace.nodes),
+
+                perm,
+                spec.plus_to_minus_shift,
+            )
+
+            push!(
+                periodic_faces,
+                PeriodicFluxFace(
+                    tr,
+                    mf.normal,
+                    mf.area,
+                    mf.centroid,
+                    spec.name,
+                ),
+            )
+        end
+    end
+
+    return DGPeriodicFluxFaces(periodic_faces)
+end
+
+# Periodic face summary 
+function print_periodic_flux_face_summary(periodic::DGPeriodicFluxFaces)
+    println("DG periodic flux faces")
+    println("----------------------")
+    println("Number of periodic faces: ", length(periodic.faces))
+
+    if isempty(periodic.faces)
+        return nothing
+    end
+
+    names = sort(unique(f.name for f in periodic.faces))
+
+    println()
+    println("Periodic face counts")
+    println("--------------------")
+
+    for name in names
+        n = count(f -> f.name == name, periodic.faces)
+        area = sum(f.area for f in periodic.faces if f.name == name)
+
+        println("  ", name, ": faces = ", n, ", area = ", area)
+    end
+
+    println()
+    println("Permutation examples")
+    println("--------------------")
+
+    nexamples = min(5, length(periodic.faces))
+
+    for i in 1:nexamples
+        f = periodic.faces[i]
+        tr = f.trace
+
+        println(
+            "periodic face ", i,
+            ": ", f.name,
+            ", elem ", tr.minus_elem, " face ", tr.minus_face,
+            " ↔ elem ", tr.plus_elem, " face ", tr.plus_face,
+            ", perm = ", tr.plus_to_minus_perm,
+        )
+    end
+
+    return nothing
+end
+
+# Geometry validation for periodic maps 
+function test_periodic_flux_face_geometry(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    periodic::DGPeriodicFluxFaces,
+)
+    max_distance = 0.0
+    worst_face = 0
+
+    for i in eachindex(periodic.faces)
+        f = periodic.faces[i]
+        tr = f.trace
+
+        minus_points = physical_face_points(
+            mesh,
+            ref,
+            tr.minus_elem,
+            tr.minus_nodes,
+        )
+
+        plus_points = physical_face_points(
+            mesh,
+            ref,
+            tr.plus_elem,
+            tr.plus_nodes,
+        )
+
+        plus_points_aligned = plus_points[tr.plus_to_minus_perm]
+
+        for q in eachindex(minus_points)
+            shifted_plus = shift_point(
+                plus_points_aligned[q],
+                tr.plus_to_minus_shift,
+            )
+
+            d = sqrt(squared_distance(minus_points[q], shifted_plus))
+
+            if d > max_distance
+                max_distance = d
+                worst_face = i
+            end
+        end
+    end
+
+    println("Periodic flux-face geometry test")
+    println("--------------------------------")
+    println("max matched-node distance: ", max_distance)
+    println("worst periodic face id:    ", worst_face)
+
+    if max_distance < 1e-10
+        println("✓ periodic matched nodes are geometrically consistent")
+    else
+        println("⚠ periodic matched nodes are not geometrically consistent")
+    end
+
+    return nothing
+end
+
+# Periodic trace continuity test 
+function periodic_test_scalar_field(x::Float64, y::Float64, z::Float64)
+    return sin(2.0 * pi * x) +
+           0.3 * cos(2.0 * pi * y) +
+           0.2 * sin(2.0 * pi * z)
+end
+
+
+function test_periodic_trace_maps_scalar_function(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    periodic::DGPeriodicFluxFaces,
+)
+    max_jump = 0.0
+    worst_face = 0
+
+    for i in eachindex(periodic.faces)
+        f = periodic.faces[i]
+        tr = f.trace
+
+        minus_points = physical_face_points(
+            mesh,
+            ref,
+            tr.minus_elem,
+            tr.minus_nodes,
+        )
+
+        plus_points = physical_face_points(
+            mesh,
+            ref,
+            tr.plus_elem,
+            tr.plus_nodes,
+        )
+
+        plus_points_aligned = plus_points[tr.plus_to_minus_perm]
+
+        for q in eachindex(minus_points)
+            xm, ym, zm = minus_points[q]
+
+            shifted_plus = shift_point(
+                plus_points_aligned[q],
+                tr.plus_to_minus_shift,
+            )
+
+            xp, yp, zp = shifted_plus
+
+            uM = periodic_test_scalar_field(xm, ym, zm)
+            uP = periodic_test_scalar_field(xp, yp, zp)
+
+            jump = abs(uM - uP)
+
+            if jump > max_jump
+                max_jump = jump
+                worst_face = i
+            end
+        end
+    end
+
+    println("Periodic scalar trace continuity test")
+    println("-------------------------------------")
+    println("max periodic jump:       ", max_jump)
+    println("worst periodic face id:  ", worst_face)
+
+    if max_jump < 1e-10
+        println("✓ periodic trace pairing is consistent for periodic scalar field")
+    else
+        println("⚠ periodic trace pairing failed scalar periodicity test")
+    end
+
+    return nothing
+end
+
+# Maxwell periodic surface RHS 
+function maxwell_periodic_surface_rhs!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    mappings::DGReferenceMapping,
+    periodic::DGPeriodicFluxFaces,
+)
+    for ff in periodic.faces
+        tr = ff.trace
+        n = ff.normal
+
+        minus = (
+            Ex = U.Ex[tr.minus_nodes, tr.minus_elem],
+            Ey = U.Ey[tr.minus_nodes, tr.minus_elem],
+            Ez = U.Ez[tr.minus_nodes, tr.minus_elem],
+
+            Hx = U.Hx[tr.minus_nodes, tr.minus_elem],
+            Hy = U.Hy[tr.minus_nodes, tr.minus_elem],
+            Hz = U.Hz[tr.minus_nodes, tr.minus_elem],
+        )
+
+        plus_nodes_aligned = tr.plus_nodes[tr.plus_to_minus_perm]
+
+        plus = (
+            Ex = U.Ex[plus_nodes_aligned, tr.plus_elem],
+            Ey = U.Ey[plus_nodes_aligned, tr.plus_elem],
+            Ez = U.Ez[plus_nodes_aligned, tr.plus_elem],
+
+            Hx = U.Hx[plus_nodes_aligned, tr.plus_elem],
+            Hy = U.Hy[plus_nodes_aligned, tr.plus_elem],
+            Hz = U.Hz[plus_nodes_aligned, tr.plus_elem],
+        )
+
+        # Central interface states.
+        Ehat_x = 0.5 .* (minus.Ex .+ plus.Ex)
+        Ehat_y = 0.5 .* (minus.Ey .+ plus.Ey)
+        Ehat_z = 0.5 .* (minus.Ez .+ plus.Ez)
+
+        Hhat_x = 0.5 .* (minus.Hx .+ plus.Hx)
+        Hhat_y = 0.5 .* (minus.Hy .+ plus.Hy)
+        Hhat_z = 0.5 .* (minus.Hz .+ plus.Hz)
+
+        # Minus side.
+        dHMx = Hhat_x .- minus.Hx
+        dHMy = Hhat_y .- minus.Hy
+        dHMz = Hhat_z .- minus.Hz
+
+        dEMx = Ehat_x .- minus.Ex
+        dEMy = Ehat_y .- minus.Ey
+        dEMz = Ehat_z .- minus.Ez
+
+        fluxExM, fluxEyM, fluxEzM = cross_n_vec(n, dHMx, dHMy, dHMz)
+        fluxHxM, fluxHyM, fluxHzM = cross_n_vec(n, dEMx, dEMy, dEMz)
+
+        fluxHxM .*= -1.0
+        fluxHyM .*= -1.0
+        fluxHzM .*= -1.0
+
+        add_lifted_face_contribution!(
+            rhs.rhsEx,
+            tr.minus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.minus_face,
+            tr.minus_nodes,
+            fluxExM,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEy,
+            tr.minus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.minus_face,
+            tr.minus_nodes,
+            fluxEyM,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEz,
+            tr.minus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.minus_face,
+            tr.minus_nodes,
+            fluxEzM,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHx,
+            tr.minus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.minus_face,
+            tr.minus_nodes,
+            fluxHxM,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHy,
+            tr.minus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.minus_face,
+            tr.minus_nodes,
+            fluxHyM,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHz,
+            tr.minus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.minus_face,
+            tr.minus_nodes,
+            fluxHzM,
+            ff.area,
+        )
+
+        # Plus side uses normal -n.
+        nplus = (-n[1], -n[2], -n[3])
+
+        dHPx = Hhat_x .- plus.Hx
+        dHPy = Hhat_y .- plus.Hy
+        dHPz = Hhat_z .- plus.Hz
+
+        dEPx = Ehat_x .- plus.Ex
+        dEPy = Ehat_y .- plus.Ey
+        dEPz = Ehat_z .- plus.Ez
+
+        fluxExP_aligned, fluxEyP_aligned, fluxEzP_aligned =
+            cross_n_vec(nplus, dHPx, dHPy, dHPz)
+
+        fluxHxP_aligned, fluxHyP_aligned, fluxHzP_aligned =
+            cross_n_vec(nplus, dEPx, dEPy, dEPz)
+
+        fluxHxP_aligned .*= -1.0
+        fluxHyP_aligned .*= -1.0
+        fluxHzP_aligned .*= -1.0
+
+        # Convert back to plus local face-node ordering.
+        fluxExP = unpermute_plus_face_values(fluxExP_aligned, tr.plus_to_minus_perm)
+        fluxEyP = unpermute_plus_face_values(fluxEyP_aligned, tr.plus_to_minus_perm)
+        fluxEzP = unpermute_plus_face_values(fluxEzP_aligned, tr.plus_to_minus_perm)
+
+        fluxHxP = unpermute_plus_face_values(fluxHxP_aligned, tr.plus_to_minus_perm)
+        fluxHyP = unpermute_plus_face_values(fluxHyP_aligned, tr.plus_to_minus_perm)
+        fluxHzP = unpermute_plus_face_values(fluxHzP_aligned, tr.plus_to_minus_perm)
+
+        add_lifted_face_contribution!(
+            rhs.rhsEx,
+            tr.plus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.plus_face,
+            tr.plus_nodes,
+            fluxExP,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEy,
+            tr.plus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.plus_face,
+            tr.plus_nodes,
+            fluxEyP,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEz,
+            tr.plus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.plus_face,
+            tr.plus_nodes,
+            fluxEzP,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHx,
+            tr.plus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.plus_face,
+            tr.plus_nodes,
+            fluxHxP,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHy,
+            tr.plus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.plus_face,
+            tr.plus_nodes,
+            fluxHyP,
+            ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHz,
+            tr.plus_elem,
+            ref,
+            fops,
+            mappings,
+            tr.plus_face,
+            tr.plus_nodes,
+            fluxHzP,
+            ff.area,
+        )
+    end
+
+    return rhs
+end
+
+# Periodic Maxwell RHS wrapper 
+function maxwell_rhs_periodic!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic::DGPeriodicFluxFaces,
+    registry::MaxwellBoundaryRegistry;
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    fill_maxwell_rhs!(rhs, 0.0)
+
+    maxwell_volume_rhs!(
+        rhs,
+        U,
+        physops;
+        ε = ε,
+        μ = μ,
+        reset = false,
+    )
+
+    maxwell_interior_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        flux_faces,
+    )
+
+    maxwell_periodic_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        periodic,
+    )
+
+    # Only non-periodic physical boundaries should remain active here.
+    # For your current case, that is boundary_id = 10, PEC sphere.
+    maxwell_boundary_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        flux_faces,
+        registry,
+    )
+
+    return rhs
+end
+
+# Important: registry for periodic runs 
+function periodic_box_with_pec_sphere_registry()
+    return MaxwellBoundaryRegistry(
+        Dict(
+            1  => MaxwellBC_None,
+            2  => MaxwellBC_None,
+            3  => MaxwellBC_None,
+            4  => MaxwellBC_None,
+            5  => MaxwellBC_None,
+            6  => MaxwellBC_None,
+            10 => MaxwellBC_PEC,
+        ),
+    )
+end
+
+function make_maxwell_periodic_rhs_function(
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic_faces::DGPeriodicFluxFaces,
+    registry::MaxwellBoundaryRegistry;
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    return function rhs_function!(rhs::MaxwellRHS, U::MaxwellField)
+        maxwell_rhs_periodic!(
+            rhs,
+            U,
+            ref,
+            fops,
+            physops,
+            mappings,
+            flux_faces,
+            periodic_faces,
+            registry;
+            ε = ε,
+            μ = μ,
+        )
+
+        return rhs
+    end
+end
+
+function test_maxwell_periodic_rhs_zero_field(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic_faces::DGPeriodicFluxFaces,
+)
+    zero_E = (x, y, z) -> (0.0, 0.0, 0.0)
+    zero_H = (x, y, z) -> (0.0, 0.0, 0.0)
+
+    U = interpolate_maxwell_field(mesh, ref, zero_E, zero_H)
+    rhs = similar_maxwell_rhs(U)
+
+    registry = periodic_box_with_pec_sphere_registry()
+
+    maxwell_rhs_periodic!(
+        rhs,
+        U,
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces,
+        registry;
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    errEx = maximum(abs.(rhs.rhsEx))
+    errEy = maximum(abs.(rhs.rhsEy))
+    errEz = maximum(abs.(rhs.rhsEz))
+
+    errHx = maximum(abs.(rhs.rhsHx))
+    errHy = maximum(abs.(rhs.rhsHy))
+    errHz = maximum(abs.(rhs.rhsHz))
+
+    maxerr = maximum((errEx, errEy, errEz, errHx, errHy, errHz))
+
+    println("Maxwell periodic RHS zero-field test")
+    println("------------------------------------")
+    println("max |rhsEx|: ", errEx)
+    println("max |rhsEy|: ", errEy)
+    println("max |rhsEz|: ", errEz)
+    println("max |rhsHx|: ", errHx)
+    println("max |rhsHy|: ", errHy)
+    println("max |rhsHz|: ", errHz)
+    println("max error:   ", maxerr)
+
+    if maxerr < 1e-12
+        println("✓ periodic Maxwell RHS vanishes for zero field")
+    else
+        println("⚠ periodic Maxwell RHS zero-field test failed")
+    end
+
+    return nothing
+end
+
+function test_rk_periodic_zero_field_step(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic_faces::DGPeriodicFluxFaces;
+    rk_order::Int = 4,
+    dt::Float64 = 1e-4,
+)
+    zero_E = (x, y, z) -> (0.0, 0.0, 0.0)
+    zero_H = (x, y, z) -> (0.0, 0.0, 0.0)
+
+    U = interpolate_maxwell_field(mesh, ref, zero_E, zero_H)
+
+    scheme = explicit_rk_scheme(rk_order)
+    work = MaxwellRKWorkspace(U, scheme)
+
+    registry = periodic_box_with_pec_sphere_registry()
+
+    rhs_function! = make_maxwell_periodic_rhs_function(
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces,
+        registry;
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    rk_step!(
+        U,
+        work,
+        scheme,
+        dt,
+        rhs_function!,
+    )
+
+    max_field = max_abs_maxwell_field(U)
+
+    println("RK periodic zero-field step test")
+    println("--------------------------------")
+    println("RK scheme:          ", scheme.name)
+    println("dt:                 ", dt)
+    println("max |U| after step: ", max_field)
+
+    if max_field < 1e-14
+        println("✓ RK periodic step preserves the zero Maxwell field")
+    else
+        println("⚠ RK periodic zero-field test failed")
+    end
+
+    return nothing
+end
+
+function test_rk_periodic_one_step_energy_diagnostic(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic_faces::DGPeriodicFluxFaces;
+    rk_order::Int = 4,
+    dt::Float64 = 1e-5,
+)
+    Efun = (x, y, z) -> (
+        sin(2.0 * pi * x) * cos(2.0 * pi * y),
+        sin(2.0 * pi * y) * cos(2.0 * pi * z),
+        sin(2.0 * pi * z) * cos(2.0 * pi * x),
+    )
+
+    Hfun = (x, y, z) -> (
+        cos(2.0 * pi * x) * sin(2.0 * pi * z),
+        cos(2.0 * pi * y) * sin(2.0 * pi * x),
+        cos(2.0 * pi * z) * sin(2.0 * pi * y),
+    )
+
+    U = interpolate_maxwell_field(mesh, ref, Efun, Hfun)
+
+    energy0 = maxwell_energy(
+        U,
+        ref,
+        mappings;
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    scheme = explicit_rk_scheme(rk_order)
+    work = MaxwellRKWorkspace(U, scheme)
+
+    registry = periodic_box_with_pec_sphere_registry()
+
+    rhs_function! = make_maxwell_periodic_rhs_function(
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces,
+        registry;
+        ε = 1.0,
+        μ = 1.0,
+        flux_kind = MaxwellFlux_Upwind
+    )
+
+    rk_step!(
+        U,
+        work,
+        scheme,
+        dt,
+        rhs_function!,
+    )
+
+    energy1 = maxwell_energy(
+        U,
+        ref,
+        mappings;
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    ΔE = energy1.total - energy0.total
+    relΔE = ΔE / max(energy0.total, eps(Float64))
+
+    println("RK periodic one-step energy diagnostic")
+    println("--------------------------------------")
+    println("RK scheme:        ", scheme.name)
+    println("dt:               ", dt)
+    println("energy before:    ", energy0.total)
+    println("energy after:     ", energy1.total)
+    println("ΔE:               ", ΔE)
+    println("relative ΔE:      ", relΔE)
+
+    return nothing
+end
+
+@enum MaxwellFluxKind begin
+    MaxwellFlux_Central = 0
+    MaxwellFlux_Upwind = 1
+    MaxwellFlux_Alternate = 2
+end
+
+function run_maxwell_periodic_time_steps!(
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic_faces::DGPeriodicFluxFaces,
+    registry::MaxwellBoundaryRegistry;
+    rk_order::Int = 4,
+    dt::Float64,
+    nsteps::Int,
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+    energy_every::Int = 1,
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Upwind,
+)
+    scheme = explicit_rk_scheme(rk_order)
+    work = MaxwellRKWorkspace(U, scheme)
+
+    rhs_function! = make_maxwell_periodic_rhs_function(
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces,
+        registry;
+        ε = ε,
+        μ = μ,
+        flux_kind = flux_kind
+    )
+
+    println("Periodic Maxwell time marching")
+    println("------------------------------")
+    println("RK scheme:       ", scheme.name)
+    println("dt:              ", dt)
+    println("nsteps:          ", nsteps)
+
+    energy0 = maxwell_energy(U, ref, mappings; ε = ε, μ = μ)
+    println("initial energy:  ", energy0.total)
+
+    for step in 1:nsteps
+        rk_step!(
+            U,
+            work,
+            scheme,
+            dt,
+            rhs_function!,
+        )
+
+        if step % energy_every == 0 || step == nsteps
+            energy = maxwell_energy(U, ref, mappings; ε = ε, μ = μ)
+            rel = (energy.total - energy0.total) / max(energy0.total, eps(Float64))
+
+            println(
+                "step = ", step,
+                ", time = ", step * dt,
+                ", energy = ", energy.total,
+                ", rel ΔE = ", rel,
+            )
+        end
+    end
+
+    return U
+end
+
+function triangle_area_from_nodes(
+    points::Matrix{Float64},
+    nodes::NTuple{3, Int},
+)
+    x1 = point3(points, nodes[1])
+    x2 = point3(points, nodes[2])
+    x3 = point3(points, nodes[3])
+
+    a = vsub(x2, x1)
+    b = vsub(x3, x1)
+
+    return 0.5 * norm3(cross3(a, b))
+end
+
+
+function tet_total_surface_area(
+    mesh::RawVTUMesh,
+    elem::Int,
+)
+    tet = mesh.tets[:, elem]
+
+    area = 0.0
+
+    for lf in 1:4
+        local_nodes = TET_FACES[lf]
+
+        face_nodes = (
+            tet[local_nodes[1]],
+            tet[local_nodes[2]],
+            tet[local_nodes[3]],
+        )
+
+        area += triangle_area_from_nodes(mesh.points, face_nodes)
+    end
+
+    return area
+end
+
+struct ElementSizeDiagnostics
+    hmin::Float64
+    hmax::Float64
+    hmean::Float64
+
+    vmin::Float64
+    vmax::Float64
+
+    amin::Float64
+    amax::Float64
+
+    worst_elem::Int
+end
+
+function element_size_diagnostics(
+    mesh::RawVTUMesh,
+    geometry::DGGeometry,
+)
+    ne = length(geometry.cells)
+
+    h = Vector{Float64}(undef, ne)
+    volumes = Vector{Float64}(undef, ne)
+    areas = Vector{Float64}(undef, ne)
+
+    for e in 1:ne
+        V = geometry.cells[e].volume
+        A = tet_total_surface_area(mesh, e)
+
+        if V <= 0.0
+            error("Element $e has non-positive volume $V.")
+        end
+
+        if A <= 0.0
+            error("Element $e has non-positive surface area $A.")
+        end
+
+        # Characteristic length based on volume-to-surface ratio.
+        h[e] = 3.0 * V / A
+
+        volumes[e] = V
+        areas[e] = A
+    end
+
+    hmin, worst_elem = findmin(h)
+
+    return ElementSizeDiagnostics(
+        hmin,
+        maximum(h),
+        sum(h) / length(h),
+        minimum(volumes),
+        maximum(volumes),
+        minimum(areas),
+        maximum(areas),
+        worst_elem,
+    )
+end
+
+function maxwell_wave_speed(; ε::Float64 = 1.0, μ::Float64 = 1.0)
+    if ε <= 0.0
+        error("ε must be positive.")
+    end
+
+    if μ <= 0.0
+        error("μ must be positive.")
+    end
+
+    return 1.0 / sqrt(ε * μ)
+end
+
+function estimate_maxwell_dt(
+    mesh::RawVTUMesh,
+    geometry::DGGeometry,
+    ref::ReferenceTet;
+    CFL::Float64 = 0.15,
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    if CFL <= 0.0
+        error("CFL must be positive.")
+    end
+
+    sizes = element_size_diagnostics(mesh, geometry)
+
+    c = maxwell_wave_speed(; ε = ε, μ = μ)
+
+    dt = CFL * sizes.hmin / ((2.0 * ref.N + 1.0) * c)
+
+    return dt, sizes
+end
+
+function print_element_size_diagnostics(sizes::ElementSizeDiagnostics)
+    println("Element-size diagnostics")
+    println("------------------------")
+    println("hmin:              ", sizes.hmin)
+    println("hmax:              ", sizes.hmax)
+    println("hmean:             ", sizes.hmean)
+    println("worst element:     ", sizes.worst_elem)
+
+    println()
+    println("Volume range")
+    println("------------")
+    println("vmin:              ", sizes.vmin)
+    println("vmax:              ", sizes.vmax)
+
+    println()
+    println("Surface-area range")
+    println("------------------")
+    println("amin:              ", sizes.amin)
+    println("amax:              ", sizes.amax)
+
+    return nothing
+end
+
+function print_maxwell_dt_estimate(
+    dt::Float64,
+    sizes::ElementSizeDiagnostics,
+    ref::ReferenceTet;
+    CFL::Float64,
+    ε::Float64,
+    μ::Float64,
+)
+    c = maxwell_wave_speed(; ε = ε, μ = μ)
+
+    println("Maxwell CFL time-step estimate")
+    println("------------------------------")
+    println("Polynomial order N:       ", ref.N)
+    println("CFL:                      ", CFL)
+    println("ε:                        ", ε)
+    println("μ:                        ", μ)
+    println("wave speed c:             ", c)
+    println("hmin:                     ", sizes.hmin)
+    println("DG denominator 2N + 1:    ", 2 * ref.N + 1)
+    println("estimated dt:             ", dt)
+
+    return nothing
+end
+
+function test_periodic_time_marching_with_cfl_dt(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    geometry::DGGeometry,
+    flux_faces::DGFluxFaces,
+    periodic_faces::DGPeriodicFluxFaces;
+    rk_order::Int = 4,
+    CFL::Float64 = 0.05,
+    nsteps::Int = 5,
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    dt, sizes = estimate_maxwell_dt(
+        mesh,
+        geometry,
+        ref;
+        CFL = CFL,
+        ε = ε,
+        μ = μ,
+    )
+
+    Efun = (x, y, z) -> (
+        sin(2.0 * pi * x) * cos(2.0 * pi * y),
+        sin(2.0 * pi * y) * cos(2.0 * pi * z),
+        sin(2.0 * pi * z) * cos(2.0 * pi * x),
+    )
+
+    Hfun = (x, y, z) -> (
+        cos(2.0 * pi * x) * sin(2.0 * pi * z),
+        cos(2.0 * pi * y) * sin(2.0 * pi * x),
+        cos(2.0 * pi * z) * sin(2.0 * pi * y),
+    )
+
+    U = interpolate_maxwell_field(mesh, ref, Efun, Hfun)
+
+    registry = periodic_box_with_pec_sphere_registry()
+
+    energy0 = maxwell_energy(U, ref, mappings; ε = ε, μ = μ)
+
+    run_maxwell_periodic_time_steps!(
+        U,
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces,
+        registry;
+        rk_order = rk_order,
+        dt = dt,
+        nsteps = nsteps,
+        ε = ε,
+        μ = μ,
+        energy_every = 1,
+    )
+
+    energy1 = maxwell_energy(U, ref, mappings; ε = ε, μ = μ)
+
+    ΔE = energy1.total - energy0.total
+    relΔE = ΔE / max(energy0.total, eps(Float64))
+
+    println()
+    println("Periodic CFL time-marching smoke test")
+    println("-------------------------------------")
+    println("RK order:        ", rk_order)
+    println("CFL:             ", CFL)
+    println("dt:              ", dt)
+    println("nsteps:          ", nsteps)
+    println("initial energy:  ", energy0.total)
+    println("final energy:    ", energy1.total)
+    println("relative ΔE:     ", relΔE)
+    println("max |U|:         ", max_abs_maxwell_field(U))
+
+    if isfinite(energy1.total) && isfinite(max_abs_maxwell_field(U))
+        println("✓ time marching completed without NaNs/Infs")
+    else
+        println("⚠ time marching produced NaNs/Infs")
+    end
+
+    return nothing
+end
+
+
+# -------------------------------------------------------------------------
+# Select different types of NUMERICAL FLUXES
+# -------------------------------------------------------------------------
+@enum MaxwellFluxKind begin
+    MaxwellFlux_Central = 0
+    MaxwellFlux_Upwind = 1
+end
+
+function maxwell_impedance(; ε::Float64 = 1.0, μ::Float64 = 1.0)
+    if ε <= 0.0 || μ <= 0.0
+        error("ε and μ must be positive.")
+    end
+
+    return sqrt(μ / ε)
+end
+
+
+function maxwell_admittance(; ε::Float64 = 1.0, μ::Float64 = 1.0)
+    return 1.0 / maxwell_impedance(; ε = ε, μ = μ)
+end
+
+function cross_n_cross_n_vec(
+    n::NTuple{3, Float64},
+    vx::AbstractVector{Float64},
+    vy::AbstractVector{Float64},
+    vz::AbstractVector{Float64},
+)
+    cx, cy, cz = cross_n_vec(n, vx, vy, vz)
+
+    return cross_n_vec(n, cx, cy, cz)
+end
+
+function maxwell_surface_flux_values(
+    minus,
+    plus,
+    n::NTuple{3, Float64};
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Central,
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    dEx = plus.Ex .- minus.Ex
+    dEy = plus.Ey .- minus.Ey
+    dEz = plus.Ez .- minus.Ez
+
+    dHx = plus.Hx .- minus.Hx
+    dHy = plus.Hy .- minus.Hy
+    dHz = plus.Hz .- minus.Hz
+
+    # Central part:
+    #
+    # E correction =  1/2 n × (H⁺ - H⁻)
+    # H correction = -1/2 n × (E⁺ - E⁻)
+    fluxEx, fluxEy, fluxEz = cross_n_vec(n, dHx, dHy, dHz)
+    fluxEx .*= 0.5
+    fluxEy .*= 0.5
+    fluxEz .*= 0.5
+
+    fluxHx, fluxHy, fluxHz = cross_n_vec(n, dEx, dEy, dEz)
+    fluxHx .*= -0.5
+    fluxHy .*= -0.5
+    fluxHz .*= -0.5
+
+    if flux_kind == MaxwellFlux_Central
+        return (
+            fluxEx = fluxEx,
+            fluxEy = fluxEy,
+            fluxEz = fluxEz,
+            fluxHx = fluxHx,
+            fluxHy = fluxHy,
+            fluxHz = fluxHz,
+        )
+
+    elseif flux_kind == MaxwellFlux_Upwind
+        Z = maxwell_impedance(; ε = ε, μ = μ)
+        Y = 1.0 / Z
+
+        # Upwind penalty:
+        #
+        # E correction += -1/2 Y n × (n × (E⁺ - E⁻))
+        # H correction += -1/2 Z n × (n × (H⁺ - H⁻))
+        nnEx, nnEy, nnEz = cross_n_cross_n_vec(n, dEx, dEy, dEz)
+        nnHx, nnHy, nnHz = cross_n_cross_n_vec(n, dHx, dHy, dHz)
+
+        fluxEx .-= 0.5 * Y .* nnEx
+        fluxEy .-= 0.5 * Y .* nnEy
+        fluxEz .-= 0.5 * Y .* nnEz
+
+        fluxHx .-= 0.5 * Z .* nnHx
+        fluxHy .-= 0.5 * Z .* nnHy
+        fluxHz .-= 0.5 * Z .* nnHz
+
+        return (
+            fluxEx = fluxEx,
+            fluxEy = fluxEy,
+            fluxEz = fluxEz,
+            fluxHx = fluxHx,
+            fluxHy = fluxHy,
+            fluxHz = fluxHz,
+        )
+
+    else
+        error("Unsupported Maxwell flux kind: $flux_kind")
+    end
+end
+
+function maxwell_interior_surface_rhs!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces;
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Central,
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    for ff in flux_faces.interior
+        tr = ff.trace
+        n = ff.normal
+
+        minus = maxwell_minus_trace(U, tr)
+        plus = maxwell_plus_trace(U, tr)
+
+        fluxM = maxwell_surface_flux_values(
+            minus,
+            plus,
+            n;
+            flux_kind = flux_kind,
+            ε = ε,
+            μ = μ,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEx, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxEx, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEy, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxEy, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEz, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxEz, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHx, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxHx, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHy, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxHy, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHz, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxHz, ff.area,
+        )
+
+        # Plus side: swap states and use outward normal from plus element.
+        nplus = (-n[1], -n[2], -n[3])
+
+        fluxP_aligned = maxwell_surface_flux_values(
+            plus,
+            minus,
+            nplus;
+            flux_kind = flux_kind,
+            ε = ε,
+            μ = μ,
+        )
+
+        fluxExP = unpermute_plus_face_values(fluxP_aligned.fluxEx, tr.plus_to_minus_perm)
+        fluxEyP = unpermute_plus_face_values(fluxP_aligned.fluxEy, tr.plus_to_minus_perm)
+        fluxEzP = unpermute_plus_face_values(fluxP_aligned.fluxEz, tr.plus_to_minus_perm)
+
+        fluxHxP = unpermute_plus_face_values(fluxP_aligned.fluxHx, tr.plus_to_minus_perm)
+        fluxHyP = unpermute_plus_face_values(fluxP_aligned.fluxHy, tr.plus_to_minus_perm)
+        fluxHzP = unpermute_plus_face_values(fluxP_aligned.fluxHz, tr.plus_to_minus_perm)
+
+        add_lifted_face_contribution!(
+            rhs.rhsEx, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxExP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEy, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxEyP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEz, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxEzP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHx, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxHxP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHy, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxHyP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHz, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxHzP, ff.area,
+        )
+    end
+
+    return rhs
+end
+
+function maxwell_periodic_surface_rhs!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    mappings::DGReferenceMapping,
+    periodic::DGPeriodicFluxFaces;
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Central,
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    for ff in periodic.faces
+        tr = ff.trace
+        n = ff.normal
+
+        plus_nodes_aligned = tr.plus_nodes[tr.plus_to_minus_perm]
+
+        minus = (
+            Ex = U.Ex[tr.minus_nodes, tr.minus_elem],
+            Ey = U.Ey[tr.minus_nodes, tr.minus_elem],
+            Ez = U.Ez[tr.minus_nodes, tr.minus_elem],
+            Hx = U.Hx[tr.minus_nodes, tr.minus_elem],
+            Hy = U.Hy[tr.minus_nodes, tr.minus_elem],
+            Hz = U.Hz[tr.minus_nodes, tr.minus_elem],
+        )
+
+        plus = (
+            Ex = U.Ex[plus_nodes_aligned, tr.plus_elem],
+            Ey = U.Ey[plus_nodes_aligned, tr.plus_elem],
+            Ez = U.Ez[plus_nodes_aligned, tr.plus_elem],
+            Hx = U.Hx[plus_nodes_aligned, tr.plus_elem],
+            Hy = U.Hy[plus_nodes_aligned, tr.plus_elem],
+            Hz = U.Hz[plus_nodes_aligned, tr.plus_elem],
+        )
+
+        fluxM = maxwell_surface_flux_values(
+            minus,
+            plus,
+            n;
+            flux_kind = flux_kind,
+            ε = ε,
+            μ = μ,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEx, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxEx, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEy, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxEy, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEz, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxEz, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHx, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxHx, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHy, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxHy, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHz, tr.minus_elem, ref, fops, mappings,
+            tr.minus_face, tr.minus_nodes, fluxM.fluxHz, ff.area,
+        )
+
+        # Plus side.
+        nplus = (-n[1], -n[2], -n[3])
+
+        fluxP_aligned = maxwell_surface_flux_values(
+            plus,
+            minus,
+            nplus;
+            flux_kind = flux_kind,
+            ε = ε,
+            μ = μ,
+        )
+
+        fluxExP = unpermute_plus_face_values(fluxP_aligned.fluxEx, tr.plus_to_minus_perm)
+        fluxEyP = unpermute_plus_face_values(fluxP_aligned.fluxEy, tr.plus_to_minus_perm)
+        fluxEzP = unpermute_plus_face_values(fluxP_aligned.fluxEz, tr.plus_to_minus_perm)
+
+        fluxHxP = unpermute_plus_face_values(fluxP_aligned.fluxHx, tr.plus_to_minus_perm)
+        fluxHyP = unpermute_plus_face_values(fluxP_aligned.fluxHy, tr.plus_to_minus_perm)
+        fluxHzP = unpermute_plus_face_values(fluxP_aligned.fluxHz, tr.plus_to_minus_perm)
+
+        add_lifted_face_contribution!(
+            rhs.rhsEx, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxExP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEy, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxEyP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsEz, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxEzP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHx, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxHxP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHy, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxHyP, ff.area,
+        )
+
+        add_lifted_face_contribution!(
+            rhs.rhsHz, tr.plus_elem, ref, fops, mappings,
+            tr.plus_face, tr.plus_nodes, fluxHzP, ff.area,
+        )
+    end
+
+    return rhs
+end
+
+function maxwell_boundary_surface_rhs!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    registry::MaxwellBoundaryRegistry;
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Central,
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    for ff in flux_faces.boundary
+        kind = boundary_kind(registry, ff.boundary_id)
+
+        if kind == MaxwellBC_None
+            continue
+
+        elseif kind == MaxwellBC_PEC
+            tr = ff.trace
+            n = ff.normal
+
+            minus = maxwell_boundary_minus_trace(U, tr)
+            plus = pec_boundary_plus_trace(minus, n)
+
+            flux = maxwell_surface_flux_values(
+                minus,
+                plus,
+                n;
+                flux_kind = flux_kind,
+                ε = ε,
+                μ = μ,
+            )
+
+            add_lifted_face_contribution!(
+                rhs.rhsEx,
+                tr.elem,
+                ref,
+                fops,
+                mappings,
+                tr.face,
+                tr.nodes,
+                flux.fluxEx,
+                ff.area,
+            )
+
+            add_lifted_face_contribution!(
+                rhs.rhsEy,
+                tr.elem,
+                ref,
+                fops,
+                mappings,
+                tr.face,
+                tr.nodes,
+                flux.fluxEy,
+                ff.area,
+            )
+
+            add_lifted_face_contribution!(
+                rhs.rhsEz,
+                tr.elem,
+                ref,
+                fops,
+                mappings,
+                tr.face,
+                tr.nodes,
+                flux.fluxEz,
+                ff.area,
+            )
+
+            add_lifted_face_contribution!(
+                rhs.rhsHx,
+                tr.elem,
+                ref,
+                fops,
+                mappings,
+                tr.face,
+                tr.nodes,
+                flux.fluxHx,
+                ff.area,
+            )
+
+            add_lifted_face_contribution!(
+                rhs.rhsHy,
+                tr.elem,
+                ref,
+                fops,
+                mappings,
+                tr.face,
+                tr.nodes,
+                flux.fluxHy,
+                ff.area,
+            )
+
+            add_lifted_face_contribution!(
+                rhs.rhsHz,
+                tr.elem,
+                ref,
+                fops,
+                mappings,
+                tr.face,
+                tr.nodes,
+                flux.fluxHz,
+                ff.area,
+            )
+
+        else
+            error("Unsupported Maxwell boundary kind $kind for boundary_id = $(ff.boundary_id).")
+        end
+    end
+
+    return rhs
+end
+
+function maxwell_rhs!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    registry::MaxwellBoundaryRegistry;
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Central,
+)
+    fill_maxwell_rhs!(rhs, 0.0)
+
+    maxwell_volume_rhs!(
+        rhs,
+        U,
+        physops;
+        ε = ε,
+        μ = μ,
+        reset = false,
+    )
+
+    maxwell_interior_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        flux_faces;
+        flux_kind = flux_kind,
+        ε = ε,
+        μ = μ,
+    )
+
+    maxwell_boundary_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        flux_faces,
+        registry;
+        flux_kind = flux_kind,
+        ε = ε,
+        μ = μ,
+    )
+
+    return rhs
+end
+
+function maxwell_rhs_periodic!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic::DGPeriodicFluxFaces,
+    registry::MaxwellBoundaryRegistry;
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Central,
+)
+    fill_maxwell_rhs!(rhs, 0.0)
+
+    maxwell_volume_rhs!(
+        rhs,
+        U,
+        physops;
+        ε = ε,
+        μ = μ,
+        reset = false,
+    )
+
+    maxwell_interior_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        flux_faces;
+        flux_kind = flux_kind,
+        ε = ε,
+        μ = μ,
+    )
+
+    maxwell_periodic_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        periodic;
+        flux_kind = flux_kind,
+        ε = ε,
+        μ = μ,
+    )
+
+    maxwell_boundary_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        flux_faces,
+        registry;
+        flux_kind = flux_kind,
+        ε = ε,
+        μ = μ,
+    )
+
+    return rhs
+end
+
+function make_maxwell_periodic_rhs_function(
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    physops::DGPhysicalOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+    periodic_faces::DGPeriodicFluxFaces,
+    registry::MaxwellBoundaryRegistry;
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+    flux_kind::MaxwellFluxKind = MaxwellFlux_Central,
+)
+    return function rhs_function!(rhs::MaxwellRHS, U::MaxwellField)
+        maxwell_rhs_periodic!(
+            rhs,
+            U,
+            ref,
+            fops,
+            physops,
+            mappings,
+            flux_faces,
+            periodic_faces,
+            registry;
+            ε = ε,
+            μ = μ,
+            flux_kind = flux_kind,
+        )
+
+        return rhs
+    end
+end
+
+function test_maxwell_upwind_interior_surface_operator(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    mappings::DGReferenceMapping,
+    flux_faces::DGFluxFaces,
+)
+    Efun = (x, y, z) -> (
+        2.0 * y + 3.0 * z,
+        4.0 * z + 5.0 * x,
+        6.0 * x + 7.0 * y,
+    )
+
+    Hfun = (x, y, z) -> (
+        3.0 * y - 2.0 * z,
+        5.0 * z - 4.0 * x,
+        7.0 * x - 6.0 * y,
+    )
+
+    U = interpolate_maxwell_field(mesh, ref, Efun, Hfun)
+    rhs = similar_maxwell_rhs(U)
+
+    fill_maxwell_rhs!(rhs, 0.0)
+
+    maxwell_interior_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        flux_faces;
+        flux_kind = MaxwellFlux_Upwind,
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    maxerr = maximum((
+        maximum(abs.(rhs.rhsEx)),
+        maximum(abs.(rhs.rhsEy)),
+        maximum(abs.(rhs.rhsEz)),
+        maximum(abs.(rhs.rhsHx)),
+        maximum(abs.(rhs.rhsHy)),
+        maximum(abs.(rhs.rhsHz)),
+    ))
+
+    println("Maxwell upwind interior surface consistency test")
+    println("------------------------------------------------")
+    println("max surface RHS: ", maxerr)
+
+    if maxerr < 1e-10
+        println("✓ upwind interior surface operator vanishes for continuous field")
+    else
+        println("⚠ upwind interior surface operator failed continuous-field test")
+    end
+
+    return nothing
+end
+
+function test_maxwell_upwind_periodic_surface_operator(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    mappings::DGReferenceMapping,
+    periodic_faces::DGPeriodicFluxFaces,
+)
+    Efun = (x, y, z) -> (
+        sin(2.0 * pi * x) * cos(2.0 * pi * y),
+        sin(2.0 * pi * y) * cos(2.0 * pi * z),
+        sin(2.0 * pi * z) * cos(2.0 * pi * x),
+    )
+
+    Hfun = (x, y, z) -> (
+        cos(2.0 * pi * x) * sin(2.0 * pi * z),
+        cos(2.0 * pi * y) * sin(2.0 * pi * x),
+        cos(2.0 * pi * z) * sin(2.0 * pi * y),
+    )
+
+    U = interpolate_maxwell_field(mesh, ref, Efun, Hfun)
+    rhs = similar_maxwell_rhs(U)
+
+    fill_maxwell_rhs!(rhs, 0.0)
+
+    maxwell_periodic_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        periodic_faces;
+        flux_kind = MaxwellFlux_Upwind,
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    maxerr = maximum((
+        maximum(abs.(rhs.rhsEx)),
+        maximum(abs.(rhs.rhsEy)),
+        maximum(abs.(rhs.rhsEz)),
+        maximum(abs.(rhs.rhsHx)),
+        maximum(abs.(rhs.rhsHy)),
+        maximum(abs.(rhs.rhsHz)),
+    ))
+
+    println("Maxwell upwind periodic surface consistency test")
+    println("-----------------------------------------------")
+    println("max periodic surface RHS: ", maxerr)
+
+    if maxerr < 1e-10
+        println("✓ upwind periodic surface operator vanishes for periodic field")
+    else
+        println("⚠ upwind periodic surface operator failed periodic-field test")
+    end
+
+    return nothing
+end
+
+function test_maxwell_upwind_periodic_surface_operator(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    mappings::DGReferenceMapping,
+    periodic_faces::DGPeriodicFluxFaces,
+)
+    Efun = (x, y, z) -> (
+        sin(2.0 * pi * x) * cos(2.0 * pi * y),
+        sin(2.0 * pi * y) * cos(2.0 * pi * z),
+        sin(2.0 * pi * z) * cos(2.0 * pi * x),
+    )
+
+    Hfun = (x, y, z) -> (
+        cos(2.0 * pi * x) * sin(2.0 * pi * z),
+        cos(2.0 * pi * y) * sin(2.0 * pi * x),
+        cos(2.0 * pi * z) * sin(2.0 * pi * y),
+    )
+
+    U = interpolate_maxwell_field(mesh, ref, Efun, Hfun)
+    rhs = similar_maxwell_rhs(U)
+
+    fill_maxwell_rhs!(rhs, 0.0)
+
+    maxwell_periodic_surface_rhs!(
+        rhs,
+        U,
+        ref,
+        fops,
+        mappings,
+        periodic_faces;
+        flux_kind = MaxwellFlux_Upwind,
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    maxerr = maximum((
+        maximum(abs.(rhs.rhsEx)),
+        maximum(abs.(rhs.rhsEy)),
+        maximum(abs.(rhs.rhsEz)),
+        maximum(abs.(rhs.rhsHx)),
+        maximum(abs.(rhs.rhsHy)),
+        maximum(abs.(rhs.rhsHz)),
+    ))
+
+    println("Maxwell upwind periodic surface consistency test")
+    println("-----------------------------------------------")
+    println("max periodic surface RHS: ", maxerr)
+
+    if maxerr < 1e-10
+        println("✓ upwind periodic surface operator vanishes for periodic field")
+    else
+        println("⚠ upwind periodic surface operator failed periodic-field test")
+    end
+
+    return nothing
+end
+
 end # module DGFEMMeshIO
 
 
@@ -6633,6 +8780,137 @@ function main()
         flux_faces;
         rk_order = rk_order,
         dt = 1e-5,
+    )
+
+    # Periodic tests
+    periodic_specs = default_unit_box_periodic_specs()
+
+    periodic_faces = build_periodic_flux_faces(
+        mesh,
+        ref,
+        flux_faces,
+        periodic_specs;
+        centroid_tol = 1e-8,
+        node_tol = 1e-8,
+        area_rtol = 1e-8,
+    )
+
+    println()
+    print_periodic_flux_face_summary(periodic_faces)
+
+    println()
+    test_periodic_flux_face_geometry(mesh, ref, periodic_faces)
+
+    println()
+    test_periodic_trace_maps_scalar_function(mesh, ref, periodic_faces)
+
+    println()
+    test_maxwell_periodic_rhs_zero_field(
+        mesh,
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces,
+    )
+
+    println()
+    test_rk_periodic_zero_field_step(
+        mesh,
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces;
+        rk_order = 4,
+        dt = 1e-4,
+    )
+
+    println()
+    test_rk_periodic_one_step_energy_diagnostic(
+        mesh,
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces;
+        rk_order = 4,
+        dt = 1e-5,
+    )
+
+    CFL = 0.05
+    ε = 1.0
+    μ = 1.0
+
+    dt, sizes = estimate_maxwell_dt(
+        mesh,
+        geometry,
+        ref;
+        CFL = CFL,
+        ε = ε,
+        μ = μ,
+    )
+
+    println()
+    print_element_size_diagnostics(sizes)
+
+    println()
+    print_maxwell_dt_estimate(
+        dt,
+        sizes,
+        ref;
+        CFL = CFL,
+        ε = ε,
+        μ = μ,
+    )
+
+    println()
+    test_periodic_time_marching_with_cfl_dt(
+        mesh,
+        ref,
+        fops,
+        physops,
+        mappings,
+        geometry,
+        flux_faces,
+        periodic_faces;
+        rk_order = 4,
+        CFL = 0.05,
+        nsteps = 5,
+        ε = 1.0,
+        μ = 1.0,
+    )
+
+    println()
+    test_maxwell_upwind_interior_surface_operator(
+        mesh,
+        ref,
+        fops,
+        mappings,
+        flux_faces,
+    )
+
+    println()
+    test_maxwell_upwind_periodic_surface_operator(
+        mesh,
+        ref,
+        fops,
+        mappings,
+        periodic_faces,
+    )
+
+    println()
+    test_maxwell_upwind_periodic_rhs_zero_field(
+        mesh,
+        ref,
+        fops,
+        physops,
+        mappings,
+        flux_faces,
+        periodic_faces,
     )
 
     println("Done.")

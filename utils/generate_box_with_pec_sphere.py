@@ -18,9 +18,12 @@ sphere_radius = 0.2
 mesh_size_box = 0.12
 mesh_size_sphere = 0.05
 
-output_vtu = "box_with_pec_sphere.vtu"
-output_msh = "box_with_pec_sphere.msh"
+output_vtu = "box_with_pec_sphere_periodic.vtu"
+output_msh = "box_with_pec_sphere_periodic.msh"
 
+# Default
+# output_vtu = "box_with_pec_sphere.vtu"
+# output_msh = "box_with_pec_sphere.msh"
 
 # Boundary IDs
 BID_XMIN = 1
@@ -198,6 +201,86 @@ def check_tets_are_outside_sphere(points, tets, tol=1e-8):
     return min_distance, bad
 
 
+# Helper that extracts surfaces by boundary ID
+def surfaces_with_boundary_id(surface_to_boundary_id, bid):
+    return [
+        tag for tag, this_bid in surface_to_boundary_id.items()
+        if this_bid == bid
+    ]
+
+def set_box_periodicity(surface_to_boundary_id, L):
+    """
+    Enforce periodic surface meshing on opposite box faces.
+
+    Gmsh convention:
+        setPeriodic(dim, slaveTags, masterTags, affineTransform)
+
+    The affine transform maps master coordinates to slave coordinates.
+
+    We use:
+        master xmin -> slave xmax with translation (+L, 0, 0)
+        master ymin -> slave ymax with translation (0, +L, 0)
+        master zmin -> slave zmax with translation (0, 0, +L)
+    """
+
+    xmin_surfs = surfaces_with_boundary_id(surface_to_boundary_id, BID_XMIN)
+    xmax_surfs = surfaces_with_boundary_id(surface_to_boundary_id, BID_XMAX)
+
+    ymin_surfs = surfaces_with_boundary_id(surface_to_boundary_id, BID_YMIN)
+    ymax_surfs = surfaces_with_boundary_id(surface_to_boundary_id, BID_YMAX)
+
+    zmin_surfs = surfaces_with_boundary_id(surface_to_boundary_id, BID_ZMIN)
+    zmax_surfs = surfaces_with_boundary_id(surface_to_boundary_id, BID_ZMAX)
+
+    if len(xmin_surfs) != len(xmax_surfs):
+        raise RuntimeError(
+            f"x periodic surfaces mismatch: xmin={xmin_surfs}, xmax={xmax_surfs}"
+        )
+
+    if len(ymin_surfs) != len(ymax_surfs):
+        raise RuntimeError(
+            f"y periodic surfaces mismatch: ymin={ymin_surfs}, ymax={ymax_surfs}"
+        )
+
+    if len(zmin_surfs) != len(zmax_surfs):
+        raise RuntimeError(
+            f"z periodic surfaces mismatch: zmin={zmin_surfs}, zmax={zmax_surfs}"
+        )
+
+    # Master xmin -> slave xmax: x' = x + L
+    Tx = [
+        1.0, 0.0, 0.0, L,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+
+    # Master ymin -> slave ymax: y' = y + L
+    Ty = [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, L,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+
+    # Master zmin -> slave zmax: z' = z + L
+    Tz = [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, L,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+
+    # slaveTags, masterTags, transform master -> slave
+    gmsh.model.mesh.setPeriodic(2, xmax_surfs, xmin_surfs, Tx)
+    gmsh.model.mesh.setPeriodic(2, ymax_surfs, ymin_surfs, Ty)
+    gmsh.model.mesh.setPeriodic(2, zmax_surfs, zmin_surfs, Tz)
+
+    print("Applied periodic surface constraints:")
+    print(f"  xmin {xmin_surfs} -> xmax {xmax_surfs}")
+    print(f"  ymin {ymin_surfs} -> ymax {ymax_surfs}")
+    print(f"  zmin {zmin_surfs} -> zmax {zmax_surfs}")
+
 def main():
     gmsh.initialize()
     gmsh.model.add("box_with_pec_sphere")
@@ -258,6 +341,8 @@ def main():
     print("Detected boundary surfaces:")
     for surf_tag, bid in sorted(surface_to_boundary_id.items()):
         print(f"  surface {surf_tag:4d} -> boundary_id {bid}")
+    
+    set_box_periodicity(surface_to_boundary_id, L)
 
     # ------------------------------------------------------------
     # Add Gmsh physical groups
