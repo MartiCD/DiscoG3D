@@ -282,3 +282,89 @@ function scalar_advection_surface_rhs_with_boundaries!(
 
     return rhs
 end
+
+function test_scalar_advection_boundary_surface_operator(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    flux_faces::DGFluxFaces,
+)
+    β = (1.0, 0.3, -0.2)
+
+    u = interpolate_scalar_field(
+        mesh,
+        ref,
+        (x, y, z) -> x + 2.0 * y + 3.0 * z,
+    )
+
+    rhs = zeros(Float64, size(u))
+
+    scalar_advection_boundary_surface_rhs!(
+        rhs,
+        u,
+        mesh,
+        ref,
+        fops,
+        flux_faces,
+        β,
+        scalar_advection_exact_boundary_state,
+    )
+
+    max_rhs = maximum(abs.(rhs))
+
+    println("Scalar advection boundary-surface test")
+    println("--------------------------------------")
+    println("β:                         ", β)
+    println("max |boundary rhs|:        ", max_rhs)
+
+    if max_rhs < 1e-10
+        println("✓ boundary surface operator vanishes for exact inflow state")
+    else
+        println("⚠ boundary surface operator is not vanishing as expected")
+    end
+
+    return nothing
+end
+
+function test_scalar_advection_full_surface_operator(
+    mesh::RawVTUMesh,
+    ref::ReferenceTet,
+    fops::ReferenceTetFaceOperators,
+    flux_faces::DGFluxFaces,
+)
+    β = (1.0, 0.3, -0.2)
+
+    u = interpolate_scalar_field(
+        mesh,
+        ref,
+        (x, y, z) -> x + 2.0 * y + 3.0 * z,
+    )
+
+    rhs = zeros(Float64, size(u))
+
+    scalar_advection_surface_rhs_with_boundaries!(
+        rhs,
+        u,
+        mesh,
+        ref,
+        fops,
+        flux_faces,
+        β,
+        scalar_advection_exact_boundary_state,
+    )
+
+    max_rhs = maximum(abs.(rhs))
+
+    println("Scalar advection full-surface test")
+    println("----------------------------------")
+    println("β:                         ", β)
+    println("max |surface rhs|:         ", max_rhs)
+
+    if max_rhs < 1e-10
+        println("✓ full surface operator vanishes for continuous field and exact boundary data")
+    else
+        println("⚠ full surface operator is not vanishing as expected")
+    end
+
+    return nothing
+end

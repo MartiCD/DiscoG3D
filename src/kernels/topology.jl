@@ -1,38 +1,7 @@
 # -------------------------------------------------------------------------
 # DG topology structs
 # -------------------------------------------------------------------------
-const TET_FACES = (
-    (2, 3, 4),  # face opposite local node 1
-    (1, 4, 3),  # face opposite local node 2
-    (1, 2, 4),  # face opposite local node 3
-    (1, 3, 2),  # face opposite local node 4
-)
 
-struct FaceRef
-    elem::Int
-    local_face::Int
-    nodes::NTuple{3, Int}
-end
-
-struct InteriorFace
-    left_elem::Int
-    left_local_face::Int
-    right_elem::Int
-    right_local_face::Int
-    nodes::NTuple{3, Int}
-end
-
-struct BoundaryFace
-    elem::Int
-    local_face::Int
-    nodes::NTuple{3, Int}
-    boundary_id::Int
-end
-
-struct DGTopology
-    interior_faces::Vector{InteriorFace}
-    boundary_faces::Vector{BoundaryFace}
-end
 
 function sorted_face_key(nodes::NTuple{3, Int})
     return Tuple(sort(collect(nodes)))

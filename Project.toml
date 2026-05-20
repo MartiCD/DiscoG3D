@@ -2,3 +2,16 @@ name = "DiscoG3D"
 uuid = "8d9d5e72-6b9d-4d6a-8e7a-2f4c7d6b1a31"
 authors = ["Martí Circuns-Duxans <marti.circuns@bsc.es>"]
 version = "0.1.0"
+
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+ReadVTK = "dc215faf-f008-4882-a9f7-a79a826fadc3"
+VTKBase = "4004b06d-e244-455f-a6ce-a5f9919cc534"
+WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

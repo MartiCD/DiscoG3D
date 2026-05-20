@@ -1,63 +1,4 @@
-"""
-    RawVTUMesh
 
-Raw mesh container read from a `.vtu` file.
-
-Fields
-------
-- `points`: 3 × Np matrix of point coordinates.
-- `tets`: 4 × Nt matrix of tetrahedral connectivity.
-- `tris`: 3 × Ns matrix of triangular surface connectivity.
-- `tet_cell_ids`: original VTK cell indices corresponding to tetrahedra.
-- `tri_cell_ids`: original VTK cell indices corresponding to triangles.
-- `cell_data`: dictionary containing raw VTK cell-data arrays.
-"""
-struct RawVTUMesh
-    points::Matrix{Float64}
-    tets::Matrix{Int}
-    tris::Matrix{Int}
-    tet_cell_ids::Vector{Int}
-    tri_cell_ids::Vector{Int}
-    cell_data::Dict{String, Any}
-end
-
-"""
-    read_vtu_mesh(filename)
-
-Read a VTU tetrahedral mesh.
-
-Example
--------
-julia
-mesh = read_vtu_mesh("box_with_sphere.vtu")
-
-"""
-function read_vtu_mesh(filename::AbstractString)
-    if !isfile(filename)
-        error("File not found: $filename")
-    end
-
-    vtk = VTKFile(filename)
-
-    points = Matrix{Float64}(get_points(vtk))
-
-    tets, tris, tet_cell_ids, tri_cell_ids = split_tets_and_tris(vtk)
-
-    cell_data = read_cell_data(vtk)
-
-    mesh = RawVTUMesh(
-        points,
-        tets,
-        tris,
-        tet_cell_ids,
-        tri_cell_ids,
-        cell_data,
-    )
-
-    check_mesh_consistency(mesh)
-
-    return mesh
-end
 
 """
     read_cell_data(vtk)
@@ -75,6 +16,7 @@ function read_cell_data(vtk)
 
     return data
 end
+
 
 """
     split_tets_and_tris(vtk)
@@ -134,6 +76,45 @@ end
 
 
 """
+    read_vtu_mesh(filename)
+
+Read a VTU tetrahedral mesh.
+
+Example
+-------
+```julia
+mesh = read_vtu_mesh("box_with_sphere.vtu")
+```
+"""
+function read_vtu_mesh(filename::AbstractString)
+    if !isfile(filename)
+        error("File not found: $filename")
+    end
+
+    vtk = VTKFile(filename)
+
+    points = Matrix{Float64}(get_points(vtk))
+
+    tets, tris, tet_cell_ids, tri_cell_ids = split_tets_and_tris(vtk)
+
+    cell_data = read_cell_data(vtk)
+
+    mesh = RawVTUMesh(
+        points,
+        tets,
+        tris,
+        tet_cell_ids,
+        tri_cell_ids,
+        cell_data,
+    )
+
+    check_mesh_consistency(mesh)
+
+    return mesh
+end
+
+
+"""
     list_cell_data(mesh)
 
 Print the available cell-data arrays.
@@ -153,6 +134,28 @@ function list_cell_data(mesh::RawVTUMesh)
 
     return nothing
 end
+
+
+"""
+    print_mesh_summary(mesh)
+
+Print a simple summary of the raw VTU mesh.
+"""
+function print_mesh_summary(mesh::RawVTUMesh)
+    println("Raw VTU mesh")
+    println("------------")
+    println("Number of points:              ", size(mesh.points, 2))
+    println("Number of tetrahedra:          ", size(mesh.tets, 2))
+    println("Number of surface triangles:   ", size(mesh.tris, 2))
+    println("Number of original tet cells:  ", length(mesh.tet_cell_ids))
+    println("Number of original tri cells:  ", length(mesh.tri_cell_ids))
+    println()
+
+    list_cell_data(mesh)
+
+    return nothing
+end
+
 
 """
     tet_data(mesh, name)
@@ -175,6 +178,7 @@ function tet_data(mesh::RawVTUMesh, name::String)
     return data[mesh.tet_cell_ids]
 end
 
+
 """
     tri_data(mesh, name)
 
@@ -182,9 +186,9 @@ Extract a cell-data array restricted to triangular surface cells.
 
 Example
 -------
-julia
+```julia
 boundary_ids = tri_data(mesh, "boundary_id")
-
+```
 """
 function tri_data(mesh::RawVTUMesh, name::String)
     if !haskey(mesh.cell_data, name)
@@ -195,6 +199,7 @@ function tri_data(mesh::RawVTUMesh, name::String)
 
     return data[mesh.tri_cell_ids]
 end
+
 
 """
     check_mesh_consistency(mesh)
@@ -247,26 +252,6 @@ function check_mesh_consistency(mesh::RawVTUMesh)
             )
         end
     end
-
-    return nothing
-end
-
-"""
-    print_mesh_summary(mesh)
-
-Print a simple summary of the raw VTU mesh.
-"""
-function print_mesh_summary(mesh::RawVTUMesh)
-    println("Raw VTU mesh")
-    println("------------")
-    println("Number of points:              ", size(mesh.points, 2))
-    println("Number of tetrahedra:          ", size(mesh.tets, 2))
-    println("Number of surface triangles:   ", size(mesh.tris, 2))
-    println("Number of original tet cells:  ", length(mesh.tet_cell_ids))
-    println("Number of original tri cells:  ", length(mesh.tri_cell_ids))
-    println()
-
-    list_cell_data(mesh)
 
     return nothing
 end

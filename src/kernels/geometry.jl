@@ -1,22 +1,7 @@
 # -------------------------------------------------------------------------
 # DG geometry structs
 # -------------------------------------------------------------------------
-struct FaceGeometry
-    centroid::NTuple{3, Float64}
-    normal::NTuple{3, Float64}   # unit normal
-    area::Float64
-end
 
-struct CellGeometry
-    centroid::NTuple{3, Float64}
-    volume::Float64
-end
-
-struct DGGeometry
-    cells::Vector{CellGeometry}
-    interior_faces::Vector{FaceGeometry}
-    boundary_faces::Vector{FaceGeometry}
-end
 
 function point3(points::Matrix{Float64}, node::Int)
     return (

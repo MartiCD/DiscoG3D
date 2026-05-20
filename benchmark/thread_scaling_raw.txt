@@ -1,0 +1,244 @@
+Running with 1 threads...
+DiscoG3D backend RHS benchmark
+------------------------------
+Timestamp:          2026-05-14T16:59:09
+Julia version:      1.10.11
+Julia threads:      1
+Active project:     /home/mcircuns/CODE/DiscoG3D/Project.toml
+
+Problem
+-------
+cells_per_axis:     6
+DG order:           3
+interior jitter:    0.05
+seed:               1234
+epsilon:            1.0
+mu:                 1.0
+flux:               upwind
+Benchmark seconds:  3.0
+Benchmark samples:  10000
+Benchmark evals:    1
+
+Model
+-----
+elements:           1296
+boundary faces:     432
+interior faces:     2376
+nodes per element:  20
+field dofs:         155520
+
+Correctness
+-----------
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+isapprox:           true
+
+Warming up both backends...
+Benchmarking one RHS evaluation per sample...
+
+Results
+-------
+threads:            1
+SerialBackend      min:    1.109969e-01 s
+                   median: 1.141351e-01 s
+                   mean:   1.141728e-01 s
+                   allocs: 408029
+                   memory: 163.533 MiB (171476672 bytes)
+ThreadedBackend    min:    1.273982e-01 s
+                   median: 1.311156e-01 s
+                   mean:   1.389764e-01 s
+                   allocs: 408077
+                   memory: 165.909 MiB (173968656 bytes)
+speedup min:        0.871260
+speedup median:     0.870492
+speedup mean:       0.821527
+efficiency median:  0.870492
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+
+CSV
+---
+CSV_RESULT,2026-05-14T16:59:26,1.10.11,1,1.109968850000e-01,1.141351190000e-01,1.141728117037e-01,1.273981800000e-01,1.311155870000e-01,1.389763733182e-01,408029,408077,171476672,173968656,8.712595815733e-01,8.704923770810e-01,8.215267744994e-01,8.704923770810e-01,2.842170943040e-14,1.425799020061e-16,true
+Running with 2 threads...
+DiscoG3D backend RHS benchmark
+------------------------------
+Timestamp:          2026-05-14T16:59:36
+Julia version:      1.10.11
+Julia threads:      2
+Active project:     /home/mcircuns/CODE/DiscoG3D/Project.toml
+
+Problem
+-------
+cells_per_axis:     6
+DG order:           3
+interior jitter:    0.05
+seed:               1234
+epsilon:            1.0
+mu:                 1.0
+flux:               upwind
+Benchmark seconds:  3.0
+Benchmark samples:  10000
+Benchmark evals:    1
+
+Model
+-----
+elements:           1296
+boundary faces:     432
+interior faces:     2376
+nodes per element:  20
+field dofs:         155520
+
+Correctness
+-----------
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+isapprox:           true
+
+Warming up both backends...
+Benchmarking one RHS evaluation per sample...
+
+Results
+-------
+threads:            2
+SerialBackend      min:    1.248797e-01 s
+                   median: 1.302843e-01 s
+                   mean:   1.339373e-01 s
+                   allocs: 408029
+                   memory: 163.533 MiB (171476672 bytes)
+ThreadedBackend    min:    8.220187e-02 s
+                   median: 9.319521e-02 s
+                   mean:   9.896600e-02 s
+                   allocs: 408116
+                   memory: 168.285 MiB (176460016 bytes)
+speedup min:        1.519183
+speedup median:     1.397972
+speedup mean:       1.353367
+efficiency median:  0.698986
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+
+CSV
+---
+CSV_RESULT,2026-05-14T16:59:52,1.10.11,2,1.248796720000e-01,1.302843250000e-01,1.339372845217e-01,8.220187100000e-02,9.319520500000e-02,9.896600138710e-02,408029,408116,171476672,176460016,1.519182841957e+00,1.397972406413e+00,1.353366637476e+00,6.989862032065e-01,2.842170943040e-14,1.425799020061e-16,true
+Running with 4 threads...
+DiscoG3D backend RHS benchmark
+------------------------------
+Timestamp:          2026-05-14T17:00:02
+Julia version:      1.10.11
+Julia threads:      4
+Active project:     /home/mcircuns/CODE/DiscoG3D/Project.toml
+
+Problem
+-------
+cells_per_axis:     6
+DG order:           3
+interior jitter:    0.05
+seed:               1234
+epsilon:            1.0
+mu:                 1.0
+flux:               upwind
+Benchmark seconds:  3.0
+Benchmark samples:  10000
+Benchmark evals:    1
+
+Model
+-----
+elements:           1296
+boundary faces:     432
+interior faces:     2376
+nodes per element:  20
+field dofs:         155520
+
+Correctness
+-----------
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+isapprox:           true
+
+Warming up both backends...
+Benchmarking one RHS evaluation per sample...
+
+Results
+-------
+threads:            4
+SerialBackend      min:    1.256196e-01 s
+                   median: 1.275565e-01 s
+                   mean:   1.280476e-01 s
+                   allocs: 408029
+                   memory: 163.533 MiB (171476672 bytes)
+ThreadedBackend    min:    6.738006e-02 s
+                   median: 9.167250e-02 s
+                   mean:   9.184740e-02 s
+                   allocs: 408194
+                   memory: 173.037 MiB (181442784 bytes)
+speedup min:        1.864344
+speedup median:     1.391437
+speedup mean:       1.394135
+efficiency median:  0.347859
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+
+CSV
+---
+CSV_RESULT,2026-05-14T17:00:18,1.10.11,4,1.256196040000e-01,1.275565455000e-01,1.280476415417e-01,6.738005600000e-02,9.167250400000e-02,9.184740175758e-02,408029,408194,171476672,181442784,1.864344013012e+00,1.391437344179e+00,1.394134609051e+00,3.478593360448e-01,2.842170943040e-14,1.425799020061e-16,true
+Running with 8 threads...
+DiscoG3D backend RHS benchmark
+------------------------------
+Timestamp:          2026-05-14T17:00:28
+Julia version:      1.10.11
+Julia threads:      8
+Active project:     /home/mcircuns/CODE/DiscoG3D/Project.toml
+
+Problem
+-------
+cells_per_axis:     6
+DG order:           3
+interior jitter:    0.05
+seed:               1234
+epsilon:            1.0
+mu:                 1.0
+flux:               upwind
+Benchmark seconds:  3.0
+Benchmark samples:  10000
+Benchmark evals:    1
+
+Model
+-----
+elements:           1296
+boundary faces:     432
+interior faces:     2376
+nodes per element:  20
+field dofs:         155520
+
+Correctness
+-----------
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+isapprox:           true
+
+Warming up both backends...
+Benchmarking one RHS evaluation per sample...
+
+Results
+-------
+threads:            8
+SerialBackend      min:    1.285182e-01 s
+                   median: 1.339148e-01 s
+                   mean:   1.362960e-01 s
+                   allocs: 408029
+                   memory: 163.533 MiB (171476672 bytes)
+ThreadedBackend    min:    7.657278e-02 s
+                   median: 9.364609e-02 s
+                   mean:   9.500009e-02 s
+                   allocs: 408350
+                   memory: 182.541 MiB (191408320 bytes)
+speedup min:        1.678379
+speedup median:     1.430009
+speedup mean:       1.434694
+efficiency median:  0.178751
+abs_err:            2.842171e-14
+rel_err:            1.425799e-16
+
+CSV
+---
+CSV_RESULT,2026-05-14T17:00:45,1.10.11,8,1.285181650000e-01,1.339147840000e-01,1.362960274783e-01,7.657278000000e-02,9.364608650000e-02,9.500008740625e-02,408029,408350,171476672,191408320,1.678379249127e+00,1.430009400339e+00,1.434693706074e+00,1.787511750424e-01,2.842170943040e-14,1.425799020061e-16,true

@@ -1,25 +1,6 @@
 # ------------------------------------------------------------------------
 # Metrics 
 # ------------------------------------------------------------------------
-struct TetMapping
-    J::Matrix{Float64}       # 3 × 3
-    invJ::Matrix{Float64}    # 3 × 3
-    detJ::Float64
-    absdetJ::Float64
-end
-
-struct DGReferenceMapping
-    tet_mappings::Vector{TetMapping}
-end
-
-const REF_TET_NODES = (
-    (-1.0, -1.0, -1.0),
-    ( 1.0, -1.0, -1.0),
-    (-1.0,  1.0, -1.0),
-    (-1.0, -1.0,  1.0),
-)
-
-const REF_TET_VOLUME = 4.0 / 3.0
 
 
 # This will be replacesd by high-order polynomials...
