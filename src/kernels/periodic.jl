@@ -2,6 +2,22 @@
 # Periodic boundary trace maps
 # -------------------------------------------------------------------------
 
+function build_periodic_flux_face_colors(faces::Vector{PeriodicFluxFace})
+    return greedy_flux_face_coloring(
+        (
+            (ff.trace.minus_elem, ff.trace.plus_elem)
+            for ff in faces
+        ),
+    )
+end
+
+function DGPeriodicFluxFaces(faces::Vector{PeriodicFluxFace})
+    return DGPeriodicFluxFaces(
+        faces,
+        build_periodic_flux_face_colors(faces),
+    )
+end
+
 
 # Default periodic specs for the unit box
 function default_unit_box_periodic_specs()
@@ -219,6 +235,7 @@ function print_periodic_flux_face_summary(periodic::DGPeriodicFluxFaces)
     println("DG periodic flux faces")
     println("----------------------")
     println("Number of periodic faces: ", length(periodic.faces))
+    println("Periodic face colors:     ", length(periodic.colors))
 
     if isempty(periodic.faces)
         return nothing

@@ -16,13 +16,14 @@ const BENCH_TET_FACES = (
 )
 
 const CSV_HEADER = (
-    "timestamp,julia_version,threads,t_serial_min,t_serial_med,t_serial_mean," *
+    "timestamp,formulation,julia_version,threads,t_serial_min,t_serial_med,t_serial_mean," *
     "t_threaded_min,t_threaded_med,t_threaded_mean,serial_allocs," *
     "threaded_allocs,serial_memory,threaded_memory,speedup_min,speedup_med," *
     "speedup_mean,efficiency_med,abs_err,rel_err,correct"
 )
 
 struct BackendBenchmarkConfig
+    formulation::Symbol
     cells_per_axis::Int
     order::Int
     jitter::Float64
@@ -34,10 +35,10 @@ struct BackendBenchmarkConfig
     evals::Int
 end
 
-struct BackendBenchmarkModel
+struct BackendBenchmarkModel{F<:AbstractMaxwellDGFormulation}
     dg::DGDiscretization
     registry::MaxwellBoundaryRegistry
-    formulation::HesthavenWarburtonFormulation
+    formulation::F
     eps::Float64
     mu::Float64
 end
@@ -49,6 +50,7 @@ function print_usage()
     println("  julia --project=. --threads=N benchmark/benchmark_backends.jl [options]")
     println()
     println("Options:")
+    println("  --formulation=F  RHS formulation: hw-upwind or pb. Default: hw-upwind")
     println("  --cells=N        Cube cells per axis. Default: 6")
     println("  --order=N        DG polynomial order. Default: 3")
     println("  --jitter=X       Interior-node jitter fraction. Default: 0.05")
@@ -66,6 +68,7 @@ end
 
 function parse_args(args)
     config = BackendBenchmarkConfig(
+        :hw_upwind,
         6,
         3,
         0.05,
@@ -77,6 +80,7 @@ function parse_args(args)
         1,
     )
 
+    formulation = config.formulation
     cells_per_axis = config.cells_per_axis
     order = config.order
     jitter = config.jitter
@@ -94,6 +98,8 @@ function parse_args(args)
         elseif arg == "--csv-header"
             println(CSV_HEADER)
             exit(0)
+        elseif startswith(arg, "--formulation=")
+            formulation = parse_formulation(split(arg, "=", limit = 2)[2])
         elseif startswith(arg, "--cells=")
             cells_per_axis = parse(Int, split(arg, "=", limit = 2)[2])
         elseif startswith(arg, "--order=")
@@ -146,6 +152,7 @@ function parse_args(args)
     end
 
     return BackendBenchmarkConfig(
+        formulation,
         cells_per_axis,
         order,
         jitter,
@@ -156,6 +163,49 @@ function parse_args(args)
         samples,
         evals,
     )
+end
+
+function parse_formulation(value::AbstractString)
+    normalized = lowercase(strip(value))
+    normalized = replace(normalized, "_" => "-")
+
+    if normalized in ("hw", "hw-upwind", "hesthaven-warburton", "hesthaven-warburton-upwind")
+        return :hw_upwind
+    elseif normalized in ("pb", "poisson-bracket", "poissonbracket")
+        return :poisson_bracket
+    else
+        error("Unsupported --formulation=$value. Expected hw-upwind or pb.")
+    end
+end
+
+function formulation_description(kind::Symbol)
+    if kind == :hw_upwind
+        return "HesthavenWarburtonFormulation / upwind"
+    elseif kind == :poisson_bracket
+        return "PoissonBracketFormulation / central"
+    else
+        error("Unsupported formulation kind: $kind.")
+    end
+end
+
+function formulation_csv_name(kind::Symbol)
+    if kind == :hw_upwind
+        return "hw-upwind"
+    elseif kind == :poisson_bracket
+        return "pb"
+    else
+        error("Unsupported formulation kind: $kind.")
+    end
+end
+
+function build_formulation(kind::Symbol)
+    if kind == :hw_upwind
+        return HesthavenWarburtonFormulation(MaxwellFlux_Upwind)
+    elseif kind == :poisson_bracket
+        return PoissonBracketFormulation()
+    else
+        error("Unsupported formulation kind: $kind.")
+    end
 end
 
 function configure_benchmarktools!(config::BackendBenchmarkConfig)
@@ -310,7 +360,7 @@ function build_model(config::BackendBenchmarkConfig)
     registry = MaxwellBoundaryRegistry(
         Dict(BENCH_PEC_BOUNDARY_ID => DiscoG3D.MaxwellBC_PEC),
     )
-    formulation = HesthavenWarburtonFormulation(MaxwellFlux_Upwind)
+    formulation = build_formulation(config.formulation)
 
     return BackendBenchmarkModel(
         dg,
@@ -433,12 +483,12 @@ function print_environment(config::BackendBenchmarkConfig)
     println("Problem")
     println("-------")
     println("cells_per_axis:     ", config.cells_per_axis)
+    println("formulation:        ", formulation_description(config.formulation))
     println("DG order:           ", config.order)
     println("interior jitter:    ", config.jitter)
     println("seed:               ", config.seed)
     println("epsilon:            ", config.eps)
     println("mu:                 ", config.mu)
-    println("flux:               upwind")
     println("Benchmark seconds:  ", config.seconds)
     println("Benchmark samples:  ", config.samples)
     println("Benchmark evals:    ", config.evals)
@@ -451,6 +501,8 @@ function print_model_summary(model::BackendBenchmarkModel, U::MaxwellField)
     println("elements:           ", size(model.dg.mesh.tets, 2))
     println("boundary faces:     ", length(model.dg.flux_faces.boundary))
     println("interior faces:     ", length(model.dg.flux_faces.interior))
+    println("boundary colors:    ", length(model.dg.flux_faces.boundary_colors))
+    println("interior colors:    ", length(model.dg.flux_faces.interior_colors))
     println("nodes per element:  ", model.dg.ref.Np)
     println("field dofs:         ", length(U.Ex) * 6)
     println()
@@ -576,8 +628,9 @@ function run_benchmark(config::BackendBenchmarkConfig)
     println("CSV")
     println("---")
     @printf(
-        "CSV_RESULT,%s,%s,%d,%.12e,%.12e,%.12e,%.12e,%.12e,%.12e,%d,%d,%d,%d,%.12e,%.12e,%.12e,%.12e,%.12e,%.12e,%s\n",
+        "CSV_RESULT,%s,%s,%s,%d,%.12e,%.12e,%.12e,%.12e,%.12e,%.12e,%d,%d,%d,%d,%.12e,%.12e,%.12e,%.12e,%.12e,%.12e,%s\n",
         timestamp_string(),
+        formulation_csv_name(config.formulation),
         string(VERSION),
         Base.Threads.nthreads(),
         t_serial_min,

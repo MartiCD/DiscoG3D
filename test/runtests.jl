@@ -79,6 +79,80 @@ function max_abs_rhs_difference(a::MaxwellRHS, b::MaxwellRHS)
     ))
 end
 
+function max_abs_field_difference(a::MaxwellField, b::MaxwellField)
+    return maximum((
+        maximum(abs.(a.Ex .- b.Ex)),
+        maximum(abs.(a.Ey .- b.Ey)),
+        maximum(abs.(a.Ez .- b.Ez)),
+        maximum(abs.(a.Hx .- b.Hx)),
+        maximum(abs.(a.Hy .- b.Hy)),
+        maximum(abs.(a.Hz .- b.Hz)),
+    ))
+end
+
+function max_abs_rhs_offset(rhs::MaxwellRHS, value::Float64)
+    return maximum((
+        maximum(abs.(rhs.rhsEx .- value)),
+        maximum(abs.(rhs.rhsEy .- value)),
+        maximum(abs.(rhs.rhsEz .- value)),
+        maximum(abs.(rhs.rhsHx .- value)),
+        maximum(abs.(rhs.rhsHy .- value)),
+        maximum(abs.(rhs.rhsHz .- value)),
+    ))
+end
+
+function colors_are_element_disjoint(colors, face_elements)
+    for color in colors
+        seen = Set{Int}()
+
+        for face_index in color
+            for elem in face_elements(face_index)
+                if elem in seen
+                    return false
+                end
+
+                push!(seen, elem)
+            end
+        end
+    end
+
+    return true
+end
+
+struct SentinelBackend <: AbstractBackend end
+
+sentinel_rhs_value(ε::Float64, μ::Float64) = 37.0 + ε + 2.0 * μ
+sentinel_periodic_rhs_value(ε::Float64, μ::Float64) = 73.0 + 3.0 * ε + 5.0 * μ
+
+function DiscoG3D.maxwell_rhs!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    dg::DGDiscretization{SentinelBackend},
+    registry::MaxwellBoundaryRegistry,
+    formulation::AbstractMaxwellDGFormulation,
+    backend::SentinelBackend;
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    DiscoG3D.fill_maxwell_rhs!(rhs, sentinel_rhs_value(ε, μ))
+    return rhs
+end
+
+function DiscoG3D.maxwell_rhs_periodic!(
+    rhs::MaxwellRHS,
+    U::MaxwellField,
+    dg::DGDiscretization{SentinelBackend},
+    periodic_faces,
+    registry::MaxwellBoundaryRegistry,
+    formulation::AbstractMaxwellDGFormulation,
+    backend::SentinelBackend;
+    ε::Float64 = 1.0,
+    μ::Float64 = 1.0,
+)
+    DiscoG3D.fill_maxwell_rhs!(rhs, sentinel_periodic_rhs_value(ε, μ))
+    return rhs
+end
+
 function max_abs_electric_rhs(rhs::MaxwellRHS)
     return maximum((
         maximum(abs.(rhs.rhsEx)),
@@ -248,6 +322,17 @@ end
     @test dg.backend isa SerialBackend
     @test dg_threaded isa DGDiscretization{ThreadedBackend}
     @test dg_threaded.backend isa ThreadedBackend
+    @test colors_are_element_disjoint(
+        dg.flux_faces.interior_colors,
+        i -> (
+            dg.flux_faces.interior[i].trace.minus_elem,
+            dg.flux_faces.interior[i].trace.plus_elem,
+        ),
+    )
+    @test colors_are_element_disjoint(
+        dg.flux_faces.boundary_colors,
+        i -> (dg.flux_faces.boundary[i].trace.elem,),
+    )
 
     registry = MaxwellBoundaryRegistry(
         Dict(10 => DiscoG3D.MaxwellBC_PEC),
@@ -351,6 +436,96 @@ end
         registry,
         PoissonBracketFormulation(MaxwellFlux_Upwind),
     )
+end
+
+@testset "Maxwell RHS factories preserve backend dispatch" begin
+    mesh = single_tet_boundary_mesh()
+    dg = DGDiscretization(mesh, 1; backend = SentinelBackend())
+    registry = empty_maxwell_boundary_registry()
+    formulation = PoissonBracketFormulation()
+
+    zero_E = (x, y, z) -> (0.0, 0.0, 0.0)
+    zero_H = (x, y, z) -> (0.0, 0.0, 0.0)
+    U = interpolate_maxwell_field(mesh, dg.ref, zero_E, zero_H)
+
+    ε = 2.0
+    μ = 3.0
+    rhs = DiscoG3D.similar_maxwell_rhs(U)
+    rhs_function! = DiscoG3D.make_maxwell_rhs_function(
+        dg,
+        registry,
+        formulation;
+        ε = ε,
+        μ = μ,
+    )
+
+    rhs_function!(rhs, U)
+    @test max_abs_rhs_offset(rhs, sentinel_rhs_value(ε, μ)) == 0.0
+
+    periodic_faces = DiscoG3D.DGPeriodicFluxFaces(DiscoG3D.PeriodicFluxFace[])
+    rhs_periodic = DiscoG3D.similar_maxwell_rhs(U)
+    periodic_rhs_function! = DiscoG3D.make_maxwell_periodic_rhs_function(
+        dg,
+        periodic_faces,
+        registry,
+        formulation;
+        ε = ε,
+        μ = μ,
+    )
+
+    periodic_rhs_function!(rhs_periodic, U)
+    @test max_abs_rhs_offset(rhs_periodic, sentinel_periodic_rhs_value(ε, μ)) == 0.0
+end
+
+@testset "Poisson-bracket time marching matches threaded backend" begin
+    mesh = two_tet_boundary_mesh()
+    dg_serial = DGDiscretization(mesh, 1; backend = SerialBackend())
+    dg_threaded = DGDiscretization(mesh, 1; backend = ThreadedBackend())
+    registry = MaxwellBoundaryRegistry(
+        Dict(10 => DiscoG3D.MaxwellBC_PEC),
+    )
+    formulation = PoissonBracketFormulation()
+
+    Efun = (x, y, z) -> (
+        sin(x + 0.25 * y),
+        cos(y - 0.5 * z),
+        x * z + 0.1 * y,
+    )
+    Hfun = (x, y, z) -> (
+        y * z - 0.2 * x,
+        sin(z + x),
+        cos(x - y),
+    )
+
+    U_serial = interpolate_maxwell_field(mesh, dg_serial.ref, Efun, Hfun)
+    U_threaded = DiscoG3D.similar_maxwell_field(U_serial)
+    DiscoG3D.copy_maxwell_field!(U_threaded, U_serial)
+
+    run_maxwell_partitioned_symplectic_time_steps!(
+        U_serial,
+        dg_serial,
+        registry,
+        formulation;
+        psrk_order = 2,
+        first_partition = :H,
+        dt = 0.01,
+        nsteps = 2,
+        energy_every = 1000,
+    )
+
+    run_maxwell_partitioned_symplectic_time_steps!(
+        U_threaded,
+        dg_threaded,
+        registry,
+        formulation;
+        psrk_order = 2,
+        first_partition = :H,
+        dt = 0.01,
+        nsteps = 2,
+        energy_every = 1000,
+    )
+
+    @test max_abs_field_difference(U_threaded, U_serial) <= 1e-12
 end
 
 function oscillator_field(E::Float64, H::Float64)

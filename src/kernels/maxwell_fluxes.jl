@@ -1346,22 +1346,42 @@ function maxwell_boundary_surface_face_rhs!(
     end
 end
 
-function thread_local_maxwell_rhs(U::MaxwellField)
-    work = [similar_maxwell_rhs(U) for _ in 1:Base.Threads.nthreads()]
-
-    for rhs in work
-        fill_maxwell_rhs!(rhs, 0.0)
-    end
-
-    return work
+struct MaxwellVolumeThreadWorkspace
+    work::Vector{MaxwellElementScratch}
+    nrows::Int
+    nthreads::Int
 end
 
-function reduce_thread_local_maxwell_rhs!(rhs::MaxwellRHS, work::Vector{MaxwellRHS})
-    for local_rhs in work
-        add_maxwell_rhs!(rhs, local_rhs)
+function MaxwellVolumeThreadWorkspace(nrows::Int)
+    return MaxwellVolumeThreadWorkspace(
+        [MaxwellElementScratch(nrows) for _ in 1:Base.Threads.nthreads()],
+        nrows,
+        Base.Threads.nthreads(),
+    )
+end
+
+function matches_workspace(
+    workspace::MaxwellVolumeThreadWorkspace,
+    nrows::Int,
+)
+    return workspace.nrows == nrows &&
+           workspace.nthreads == Base.Threads.nthreads()
+end
+
+function maxwell_volume_thread_workspace!(
+    backend::ThreadedBackend,
+    U::MaxwellField,
+)
+    nrows = size(U.Ex, 1)
+    workspace = backend.maxwell_volume_workspace[]
+
+    if !(workspace isa MaxwellVolumeThreadWorkspace) ||
+       !matches_workspace(workspace, nrows)
+        workspace = MaxwellVolumeThreadWorkspace(nrows)
+        backend.maxwell_volume_workspace[] = workspace
     end
 
-    return rhs
+    return workspace::MaxwellVolumeThreadWorkspace
 end
 
 function maxwell_volume_rhs_threaded!(
@@ -1370,6 +1390,7 @@ function maxwell_volume_rhs_threaded!(
     physops::DGPhysicalOperators;
     ε::Float64,
     μ::Float64,
+    workspace::Union{Nothing,MaxwellVolumeThreadWorkspace} = nothing,
 )
     ne = size(U.Ex, 2)
 
@@ -1377,30 +1398,46 @@ function maxwell_volume_rhs_threaded!(
         return rhs
     end
 
-    Base.Threads.@threads for e in 1:ne
-        op = physops.elements[e]
+    work = workspace === nothing ?
+           MaxwellVolumeThreadWorkspace(size(U.Ex, 1)).work :
+           workspace.work
 
-        curlHx, curlHy, curlHz = curl_element(
-            U.Hx[:, e],
-            U.Hy[:, e],
-            U.Hz[:, e],
-            op,
-        )
+    Base.Threads.@threads :static for e in 1:ne
+        scratch = work[Base.Threads.threadid()]
 
-        curlEx, curlEy, curlEz = curl_element(
-            U.Ex[:, e],
-            U.Ey[:, e],
-            U.Ez[:, e],
-            op,
-        )
+        @views begin
+            op = physops.elements[e]
 
-        rhs.rhsEx[:, e] .+=  (1.0 / ε) .* curlHx
-        rhs.rhsEy[:, e] .+=  (1.0 / ε) .* curlHy
-        rhs.rhsEz[:, e] .+=  (1.0 / ε) .* curlHz
+            curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Hx[:, e],
+                U.Hy[:, e],
+                U.Hz[:, e],
+                op,
+            )
 
-        rhs.rhsHx[:, e] .+= -(1.0 / μ) .* curlEx
-        rhs.rhsHy[:, e] .+= -(1.0 / μ) .* curlEy
-        rhs.rhsHz[:, e] .+= -(1.0 / μ) .* curlEz
+            rhs.rhsEx[:, e] .+=  (1.0 / ε) .* scratch.curl_x
+            rhs.rhsEy[:, e] .+=  (1.0 / ε) .* scratch.curl_y
+            rhs.rhsEz[:, e] .+=  (1.0 / ε) .* scratch.curl_z
+
+            curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Ex[:, e],
+                U.Ey[:, e],
+                U.Ez[:, e],
+                op,
+            )
+
+            rhs.rhsHx[:, e] .+= -(1.0 / μ) .* scratch.curl_x
+            rhs.rhsHy[:, e] .+= -(1.0 / μ) .* scratch.curl_y
+            rhs.rhsHz[:, e] .+= -(1.0 / μ) .* scratch.curl_z
+        end
     end
 
     return rhs
@@ -1414,6 +1451,7 @@ function maxwell_volume_rhs_threaded!(
     formulation::HesthavenWarburtonFormulation;
     ε::Float64,
     μ::Float64,
+    workspace::Union{Nothing,MaxwellVolumeThreadWorkspace} = nothing,
 )
     return maxwell_volume_rhs_threaded!(
         rhs,
@@ -1421,6 +1459,7 @@ function maxwell_volume_rhs_threaded!(
         physops;
         ε = ε,
         μ = μ,
+        workspace = workspace,
     )
 end
 
@@ -1432,6 +1471,7 @@ function maxwell_volume_rhs_threaded!(
     formulation::PoissonBracketFormulation;
     ε::Float64,
     μ::Float64,
+    workspace::Union{Nothing,MaxwellVolumeThreadWorkspace} = nothing,
 )
     require_poisson_bracket_central_flux(formulation)
 
@@ -1441,26 +1481,61 @@ function maxwell_volume_rhs_threaded!(
         return rhs
     end
 
-    Base.Threads.@threads for e in 1:ne
-        op = physops.elements[e]
-        Sx, Sy, Sz = physical_weak_derivative_matrices(op)
-        SxT, SyT, SzT = physical_weak_derivative_transpose_matrices(op)
+    work = workspace === nothing ?
+           MaxwellVolumeThreadWorkspace(size(U.Ex, 1)).work :
+           workspace.work
+    mass_factor = cholesky(ref.M)
 
-        weak_curl_Hx = Sy * U.Hz[:, e] .- Sz * U.Hy[:, e]
-        weak_curl_Hy = Sz * U.Hx[:, e] .- Sx * U.Hz[:, e]
-        weak_curl_Hz = Sx * U.Hy[:, e] .- Sy * U.Hx[:, e]
+    Base.Threads.@threads :static for e in 1:ne
+        scratch = work[Base.Threads.threadid()]
 
-        adjoint_curl_Ex = SyT * U.Ez[:, e] .- SzT * U.Ey[:, e]
-        adjoint_curl_Ey = SzT * U.Ex[:, e] .- SxT * U.Ez[:, e]
-        adjoint_curl_Ez = SxT * U.Ey[:, e] .- SyT * U.Ex[:, e]
+        @views begin
+            op = physops.elements[e]
+            Sx, Sy, Sz = physical_weak_derivative_matrices(op)
+            SxT, SyT, SzT = physical_weak_derivative_transpose_matrices(op)
 
-        rhs.rhsEx[:, e] .+= (1.0 / ε) .* (ref.M \ weak_curl_Hx)
-        rhs.rhsEy[:, e] .+= (1.0 / ε) .* (ref.M \ weak_curl_Hy)
-        rhs.rhsEz[:, e] .+= (1.0 / ε) .* (ref.M \ weak_curl_Hz)
+            weak_curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Hx[:, e],
+                U.Hy[:, e],
+                U.Hz[:, e],
+                Sx,
+                Sy,
+                Sz,
+            )
 
-        rhs.rhsHx[:, e] .+= (1.0 / μ) .* (ref.M \ adjoint_curl_Ex)
-        rhs.rhsHy[:, e] .+= (1.0 / μ) .* (ref.M \ adjoint_curl_Ey)
-        rhs.rhsHz[:, e] .+= (1.0 / μ) .* (ref.M \ adjoint_curl_Ez)
+            ldiv!(mass_factor, scratch.curl_x)
+            ldiv!(mass_factor, scratch.curl_y)
+            ldiv!(mass_factor, scratch.curl_z)
+
+            rhs.rhsEx[:, e] .+= (1.0 / ε) .* scratch.curl_x
+            rhs.rhsEy[:, e] .+= (1.0 / ε) .* scratch.curl_y
+            rhs.rhsEz[:, e] .+= (1.0 / ε) .* scratch.curl_z
+
+            weak_curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Ex[:, e],
+                U.Ey[:, e],
+                U.Ez[:, e],
+                SxT,
+                SyT,
+                SzT,
+            )
+
+            ldiv!(mass_factor, scratch.curl_x)
+            ldiv!(mass_factor, scratch.curl_y)
+            ldiv!(mass_factor, scratch.curl_z)
+
+            rhs.rhsHx[:, e] .+= (1.0 / μ) .* scratch.curl_x
+            rhs.rhsHy[:, e] .+= (1.0 / μ) .* scratch.curl_y
+            rhs.rhsHz[:, e] .+= (1.0 / μ) .* scratch.curl_z
+        end
     end
 
     return rhs
@@ -1477,31 +1552,23 @@ function maxwell_interior_surface_rhs_threaded!(
     ε::Float64,
     μ::Float64,
 )
-    nfaces = length(flux_faces.interior)
-
-    if nfaces == 0
-        return rhs
+    for color in flux_faces.interior_colors
+        Base.Threads.@threads :static for j in eachindex(color)
+            maxwell_interior_surface_face_rhs!(
+                rhs,
+                U,
+                ref,
+                fops,
+                mappings,
+                flux_faces.interior[color[j]];
+                flux_kind = flux_kind,
+                ε = ε,
+                μ = μ,
+            )
+        end
     end
 
-    work = thread_local_maxwell_rhs(U)
-
-    Base.Threads.@threads for i in 1:nfaces
-        local_rhs = work[Base.Threads.threadid()]
-
-        maxwell_interior_surface_face_rhs!(
-            local_rhs,
-            U,
-            ref,
-            fops,
-            mappings,
-            flux_faces.interior[i];
-            flux_kind = flux_kind,
-            ε = ε,
-            μ = μ,
-        )
-    end
-
-    return reduce_thread_local_maxwell_rhs!(rhs, work)
+    return rhs
 end
 
 function maxwell_interior_surface_rhs_threaded!(
@@ -1541,31 +1608,23 @@ function maxwell_interior_surface_rhs_threaded!(
 )
     require_poisson_bracket_central_flux(formulation)
 
-    nfaces = length(flux_faces.interior)
-
-    if nfaces == 0
-        return rhs
+    for color in flux_faces.interior_colors
+        Base.Threads.@threads :static for j in eachindex(color)
+            maxwell_interior_surface_face_rhs!(
+                rhs,
+                U,
+                ref,
+                fops,
+                mappings,
+                flux_faces.interior[color[j]],
+                formulation;
+                ε = ε,
+                μ = μ,
+            )
+        end
     end
 
-    work = thread_local_maxwell_rhs(U)
-
-    Base.Threads.@threads for i in 1:nfaces
-        local_rhs = work[Base.Threads.threadid()]
-
-        maxwell_interior_surface_face_rhs!(
-            local_rhs,
-            U,
-            ref,
-            fops,
-            mappings,
-            flux_faces.interior[i],
-            formulation;
-            ε = ε,
-            μ = μ,
-        )
-    end
-
-    return reduce_thread_local_maxwell_rhs!(rhs, work)
+    return rhs
 end
 
 function maxwell_periodic_surface_rhs_threaded!(
@@ -1579,31 +1638,23 @@ function maxwell_periodic_surface_rhs_threaded!(
     ε::Float64,
     μ::Float64,
 )
-    nfaces = length(periodic.faces)
-
-    if nfaces == 0
-        return rhs
+    for color in periodic.colors
+        Base.Threads.@threads :static for j in eachindex(color)
+            maxwell_periodic_surface_face_rhs!(
+                rhs,
+                U,
+                ref,
+                fops,
+                mappings,
+                periodic.faces[color[j]];
+                flux_kind = flux_kind,
+                ε = ε,
+                μ = μ,
+            )
+        end
     end
 
-    work = thread_local_maxwell_rhs(U)
-
-    Base.Threads.@threads for i in 1:nfaces
-        local_rhs = work[Base.Threads.threadid()]
-
-        maxwell_periodic_surface_face_rhs!(
-            local_rhs,
-            U,
-            ref,
-            fops,
-            mappings,
-            periodic.faces[i];
-            flux_kind = flux_kind,
-            ε = ε,
-            μ = μ,
-        )
-    end
-
-    return reduce_thread_local_maxwell_rhs!(rhs, work)
+    return rhs
 end
 
 function maxwell_periodic_surface_rhs_threaded!(
@@ -1643,31 +1694,23 @@ function maxwell_periodic_surface_rhs_threaded!(
 )
     require_poisson_bracket_central_flux(formulation)
 
-    nfaces = length(periodic.faces)
-
-    if nfaces == 0
-        return rhs
+    for color in periodic.colors
+        Base.Threads.@threads :static for j in eachindex(color)
+            maxwell_periodic_surface_face_rhs!(
+                rhs,
+                U,
+                ref,
+                fops,
+                mappings,
+                periodic.faces[color[j]],
+                formulation;
+                ε = ε,
+                μ = μ,
+            )
+        end
     end
 
-    work = thread_local_maxwell_rhs(U)
-
-    Base.Threads.@threads for i in 1:nfaces
-        local_rhs = work[Base.Threads.threadid()]
-
-        maxwell_periodic_surface_face_rhs!(
-            local_rhs,
-            U,
-            ref,
-            fops,
-            mappings,
-            periodic.faces[i],
-            formulation;
-            ε = ε,
-            μ = μ,
-        )
-    end
-
-    return reduce_thread_local_maxwell_rhs!(rhs, work)
+    return rhs
 end
 
 function maxwell_boundary_surface_rhs_threaded!(
@@ -1682,32 +1725,24 @@ function maxwell_boundary_surface_rhs_threaded!(
     ε::Float64,
     μ::Float64,
 )
-    nfaces = length(flux_faces.boundary)
-
-    if nfaces == 0
-        return rhs
+    for color in flux_faces.boundary_colors
+        Base.Threads.@threads :static for j in eachindex(color)
+            maxwell_boundary_surface_face_rhs!(
+                rhs,
+                U,
+                ref,
+                fops,
+                mappings,
+                flux_faces.boundary[color[j]],
+                registry;
+                flux_kind = flux_kind,
+                ε = ε,
+                μ = μ,
+            )
+        end
     end
 
-    work = thread_local_maxwell_rhs(U)
-
-    Base.Threads.@threads for i in 1:nfaces
-        local_rhs = work[Base.Threads.threadid()]
-
-        maxwell_boundary_surface_face_rhs!(
-            local_rhs,
-            U,
-            ref,
-            fops,
-            mappings,
-            flux_faces.boundary[i],
-            registry;
-            flux_kind = flux_kind,
-            ε = ε,
-            μ = μ,
-        )
-    end
-
-    return reduce_thread_local_maxwell_rhs!(rhs, work)
+    return rhs
 end
 
 function maxwell_boundary_surface_rhs_threaded!(
@@ -1750,32 +1785,24 @@ function maxwell_boundary_surface_rhs_threaded!(
 )
     require_poisson_bracket_central_flux(formulation)
 
-    nfaces = length(flux_faces.boundary)
-
-    if nfaces == 0
-        return rhs
+    for color in flux_faces.boundary_colors
+        Base.Threads.@threads :static for j in eachindex(color)
+            maxwell_boundary_surface_face_rhs!(
+                rhs,
+                U,
+                ref,
+                fops,
+                mappings,
+                flux_faces.boundary[color[j]],
+                registry,
+                formulation;
+                ε = ε,
+                μ = μ,
+            )
+        end
     end
 
-    work = thread_local_maxwell_rhs(U)
-
-    Base.Threads.@threads for i in 1:nfaces
-        local_rhs = work[Base.Threads.threadid()]
-
-        maxwell_boundary_surface_face_rhs!(
-            local_rhs,
-            U,
-            ref,
-            fops,
-            mappings,
-            flux_faces.boundary[i],
-            registry,
-            formulation;
-            ε = ε,
-            μ = μ,
-        )
-    end
-
-    return reduce_thread_local_maxwell_rhs!(rhs, work)
+    return rhs
 end
 
 function maxwell_rhs!(
@@ -1970,6 +1997,7 @@ function maxwell_rhs!(
     μ::Float64 = 1.0,
 )
     fill_maxwell_rhs!(rhs, 0.0)
+    volume_workspace = maxwell_volume_thread_workspace!(backend, U)
 
     maxwell_volume_rhs_threaded!(
         rhs,
@@ -1979,6 +2007,7 @@ function maxwell_rhs!(
         formulation;
         ε = ε,
         μ = μ,
+        workspace = volume_workspace,
     )
 
     maxwell_interior_surface_rhs_threaded!(
@@ -2093,6 +2122,7 @@ function maxwell_rhs!(
     require_poisson_bracket_central_flux(formulation)
 
     fill_maxwell_rhs!(rhs, 0.0)
+    volume_workspace = maxwell_volume_thread_workspace!(backend, U)
 
     maxwell_volume_rhs_threaded!(
         rhs,
@@ -2102,6 +2132,7 @@ function maxwell_rhs!(
         formulation;
         ε = ε,
         μ = μ,
+        workspace = volume_workspace,
     )
 
     maxwell_interior_surface_rhs_threaded!(
@@ -2334,6 +2365,7 @@ function maxwell_rhs_periodic!(
     μ::Float64 = 1.0,
 )
     fill_maxwell_rhs!(rhs, 0.0)
+    volume_workspace = maxwell_volume_thread_workspace!(backend, U)
 
     maxwell_volume_rhs_threaded!(
         rhs,
@@ -2343,6 +2375,7 @@ function maxwell_rhs_periodic!(
         formulation;
         ε = ε,
         μ = μ,
+        workspace = volume_workspace,
     )
 
     maxwell_interior_surface_rhs_threaded!(
@@ -2499,6 +2532,7 @@ function maxwell_rhs_periodic!(
     require_poisson_bracket_central_flux(formulation)
 
     fill_maxwell_rhs!(rhs, 0.0)
+    volume_workspace = maxwell_volume_thread_workspace!(backend, U)
 
     maxwell_volume_rhs_threaded!(
         rhs,
@@ -2508,6 +2542,7 @@ function maxwell_rhs_periodic!(
         formulation;
         ε = ε,
         μ = μ,
+        workspace = volume_workspace,
     )
 
     maxwell_interior_surface_rhs_threaded!(
@@ -2634,18 +2669,20 @@ function make_maxwell_periodic_rhs_function(
     ε::Float64 = 1.0,
     μ::Float64 = 1.0,
 )
-    return make_maxwell_periodic_rhs_function(
-        dg.ref,
-        dg.fops,
-        dg.physops,
-        dg.mappings,
-        dg.flux_faces,
-        periodic_faces,
-        registry,
-        formulation;
-        ε = ε,
-        μ = μ,
-    )
+    return function rhs_function!(rhs::MaxwellRHS, U::MaxwellField)
+        maxwell_rhs_periodic!(
+            rhs,
+            U,
+            dg,
+            periodic_faces,
+            registry,
+            formulation;
+            ε = ε,
+            μ = μ,
+        )
+
+        return rhs
+    end
 end
 
 function test_maxwell_upwind_interior_surface_operator(

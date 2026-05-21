@@ -650,17 +650,19 @@ function make_maxwell_rhs_function(
     ε::Float64 = 1.0,
     μ::Float64 = 1.0,
 )
-    return make_maxwell_rhs_function(
-        dg.ref,
-        dg.fops,
-        dg.physops,
-        dg.mappings,
-        dg.flux_faces,
-        registry,
-        formulation;
-        ε = ε,
-        μ = μ,
-    )
+    return function rhs_function!(rhs::MaxwellRHS, U::MaxwellField)
+        maxwell_rhs!(
+            rhs,
+            U,
+            dg,
+            registry,
+            formulation;
+            ε = ε,
+            μ = μ,
+        )
+
+        return rhs
+    end
 end
 
 function max_abs_maxwell_field(U::MaxwellField)

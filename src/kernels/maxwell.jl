@@ -264,25 +264,90 @@ function curl_element(
     Fz::AbstractVector{Float64},
     op::PhysicalElementOperators,
 )
-    dFx_dx = op.Dx * Fx
-    dFx_dy = op.Dy * Fx
-    dFx_dz = op.Dz * Fx
+    scratch = MaxwellElementScratch(length(Fx))
 
-    dFy_dx = op.Dx * Fy
-    dFy_dy = op.Dy * Fy
-    dFy_dz = op.Dz * Fy
+    curl_element!(
+        scratch.curl_x,
+        scratch.curl_y,
+        scratch.curl_z,
+        scratch.tmp,
+        Fx,
+        Fy,
+        Fz,
+        op,
+    )
 
-    dFz_dx = op.Dx * Fz
-    dFz_dy = op.Dy * Fz
-    dFz_dz = op.Dz * Fz
+    return copy(scratch.curl_x), copy(scratch.curl_y), copy(scratch.curl_z)
+end
 
-    curl_x = dFz_dy .- dFy_dz
-    curl_y = dFx_dz .- dFz_dx
-    curl_z = dFy_dx .- dFx_dy
+struct MaxwellElementScratch
+    tmp::Vector{Float64}
+    curl_x::Vector{Float64}
+    curl_y::Vector{Float64}
+    curl_z::Vector{Float64}
+end
+
+function MaxwellElementScratch(n::Int)
+    return MaxwellElementScratch(
+        Vector{Float64}(undef, n),
+        Vector{Float64}(undef, n),
+        Vector{Float64}(undef, n),
+        Vector{Float64}(undef, n),
+    )
+end
+
+function curl_element!(
+    curl_x::AbstractVector{Float64},
+    curl_y::AbstractVector{Float64},
+    curl_z::AbstractVector{Float64},
+    tmp::AbstractVector{Float64},
+    Fx::AbstractVector{Float64},
+    Fy::AbstractVector{Float64},
+    Fz::AbstractVector{Float64},
+    op::PhysicalElementOperators,
+)
+    weak_curl_element!(
+        curl_x,
+        curl_y,
+        curl_z,
+        tmp,
+        Fx,
+        Fy,
+        Fz,
+        op.Dx,
+        op.Dy,
+        op.Dz,
+    )
 
     return curl_x, curl_y, curl_z
 end
 
+function weak_curl_element!(
+    curl_x::AbstractVector{Float64},
+    curl_y::AbstractVector{Float64},
+    curl_z::AbstractVector{Float64},
+    tmp::AbstractVector{Float64},
+    Fx::AbstractVector{Float64},
+    Fy::AbstractVector{Float64},
+    Fz::AbstractVector{Float64},
+    Dx::AbstractMatrix{Float64},
+    Dy::AbstractMatrix{Float64},
+    Dz::AbstractMatrix{Float64},
+)
+    mul!(curl_x, Dy, Fz)
+    mul!(tmp, Dz, Fy)
+    curl_x .-= tmp
+
+    mul!(curl_y, Dz, Fx)
+    mul!(tmp, Dx, Fz)
+    curl_y .-= tmp
+
+    mul!(curl_z, Dx, Fy)
+    mul!(tmp, Dy, Fx)
+    curl_z .-= tmp
+
+    return curl_x, curl_y, curl_z
+end
 
 function similar_maxwell_rhs(U::MaxwellField)
     return MaxwellRHS(
@@ -352,31 +417,42 @@ function maxwell_volume_rhs!(
     end
 
     ne = size(U.Ex, 2)
+    scratch = MaxwellElementScratch(size(U.Ex, 1))
 
     for e in 1:ne
-        op = physops.elements[e]
+        @views begin
+            op = physops.elements[e]
 
-        curlHx, curlHy, curlHz = curl_element(
-            U.Hx[:, e],
-            U.Hy[:, e],
-            U.Hz[:, e],
-            op,
-        )
+            curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Hx[:, e],
+                U.Hy[:, e],
+                U.Hz[:, e],
+                op,
+            )
 
-        curlEx, curlEy, curlEz = curl_element(
-            U.Ex[:, e],
-            U.Ey[:, e],
-            U.Ez[:, e],
-            op,
-        )
+            rhs.rhsEx[:, e] .+=  (1.0 / ε) .* scratch.curl_x
+            rhs.rhsEy[:, e] .+=  (1.0 / ε) .* scratch.curl_y
+            rhs.rhsEz[:, e] .+=  (1.0 / ε) .* scratch.curl_z
 
-        rhs.rhsEx[:, e] .+=  (1.0 / ε) .* curlHx
-        rhs.rhsEy[:, e] .+=  (1.0 / ε) .* curlHy
-        rhs.rhsEz[:, e] .+=  (1.0 / ε) .* curlHz
+            curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Ex[:, e],
+                U.Ey[:, e],
+                U.Ez[:, e],
+                op,
+            )
 
-        rhs.rhsHx[:, e] .+= -(1.0 / μ) .* curlEx
-        rhs.rhsHy[:, e] .+= -(1.0 / μ) .* curlEy
-        rhs.rhsHz[:, e] .+= -(1.0 / μ) .* curlEz
+            rhs.rhsHx[:, e] .+= -(1.0 / μ) .* scratch.curl_x
+            rhs.rhsHy[:, e] .+= -(1.0 / μ) .* scratch.curl_y
+            rhs.rhsHz[:, e] .+= -(1.0 / μ) .* scratch.curl_z
+        end
     end
 
     return rhs
@@ -417,27 +493,57 @@ function maxwell_volume_rhs!(
     end
 
     ne = size(U.Ex, 2)
+    scratch = MaxwellElementScratch(size(U.Ex, 1))
+    mass_factor = cholesky(ref.M)
 
     for e in 1:ne
-        op = physops.elements[e]
-        Sx, Sy, Sz = physical_weak_derivative_matrices(op)
-        SxT, SyT, SzT = physical_weak_derivative_transpose_matrices(op)
+        @views begin
+            op = physops.elements[e]
+            Sx, Sy, Sz = physical_weak_derivative_matrices(op)
+            SxT, SyT, SzT = physical_weak_derivative_transpose_matrices(op)
 
-        weak_curl_Hx = Sy * U.Hz[:, e] .- Sz * U.Hy[:, e]
-        weak_curl_Hy = Sz * U.Hx[:, e] .- Sx * U.Hz[:, e]
-        weak_curl_Hz = Sx * U.Hy[:, e] .- Sy * U.Hx[:, e]
+            weak_curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Hx[:, e],
+                U.Hy[:, e],
+                U.Hz[:, e],
+                Sx,
+                Sy,
+                Sz,
+            )
 
-        adjoint_curl_Ex = SyT * U.Ez[:, e] .- SzT * U.Ey[:, e]
-        adjoint_curl_Ey = SzT * U.Ex[:, e] .- SxT * U.Ez[:, e]
-        adjoint_curl_Ez = SxT * U.Ey[:, e] .- SyT * U.Ex[:, e]
+            ldiv!(mass_factor, scratch.curl_x)
+            ldiv!(mass_factor, scratch.curl_y)
+            ldiv!(mass_factor, scratch.curl_z)
 
-        rhs.rhsEx[:, e] .+= (1.0 / ε) .* (ref.M \ weak_curl_Hx)
-        rhs.rhsEy[:, e] .+= (1.0 / ε) .* (ref.M \ weak_curl_Hy)
-        rhs.rhsEz[:, e] .+= (1.0 / ε) .* (ref.M \ weak_curl_Hz)
+            rhs.rhsEx[:, e] .+= (1.0 / ε) .* scratch.curl_x
+            rhs.rhsEy[:, e] .+= (1.0 / ε) .* scratch.curl_y
+            rhs.rhsEz[:, e] .+= (1.0 / ε) .* scratch.curl_z
 
-        rhs.rhsHx[:, e] .+= (1.0 / μ) .* (ref.M \ adjoint_curl_Ex)
-        rhs.rhsHy[:, e] .+= (1.0 / μ) .* (ref.M \ adjoint_curl_Ey)
-        rhs.rhsHz[:, e] .+= (1.0 / μ) .* (ref.M \ adjoint_curl_Ez)
+            weak_curl_element!(
+                scratch.curl_x,
+                scratch.curl_y,
+                scratch.curl_z,
+                scratch.tmp,
+                U.Ex[:, e],
+                U.Ey[:, e],
+                U.Ez[:, e],
+                SxT,
+                SyT,
+                SzT,
+            )
+
+            ldiv!(mass_factor, scratch.curl_x)
+            ldiv!(mass_factor, scratch.curl_y)
+            ldiv!(mass_factor, scratch.curl_z)
+
+            rhs.rhsHx[:, e] .+= (1.0 / μ) .* scratch.curl_x
+            rhs.rhsHy[:, e] .+= (1.0 / μ) .* scratch.curl_y
+            rhs.rhsHz[:, e] .+= (1.0 / μ) .* scratch.curl_z
+        end
     end
 
     return rhs

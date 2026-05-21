@@ -2,6 +2,66 @@
 # Flux-ready DG faces
 # -------------------------------------------------------------------------
 
+function greedy_flux_face_coloring(face_elements)
+    colors = Vector{Vector{Int}}()
+    color_elements = Vector{Set{Int}}()
+
+    for (i, elems) in enumerate(face_elements)
+        assigned = false
+
+        for color_id in eachindex(colors)
+            used = color_elements[color_id]
+
+            if all(elem -> !(elem in used), elems)
+                push!(colors[color_id], i)
+
+                for elem in elems
+                    push!(used, elem)
+                end
+
+                assigned = true
+                break
+            end
+        end
+
+        if !assigned
+            push!(colors, [i])
+            push!(color_elements, Set{Int}(elems))
+        end
+    end
+
+    return colors
+end
+
+function build_interior_flux_face_colors(interior::Vector{InteriorFluxFace})
+    return greedy_flux_face_coloring(
+        (
+            (ff.trace.minus_elem, ff.trace.plus_elem)
+            for ff in interior
+        ),
+    )
+end
+
+function build_boundary_flux_face_colors(boundary::Vector{BoundaryFluxFace})
+    return greedy_flux_face_coloring(
+        (
+            (ff.trace.elem,)
+            for ff in boundary
+        ),
+    )
+end
+
+function DGFluxFaces(
+    interior::Vector{InteriorFluxFace},
+    boundary::Vector{BoundaryFluxFace},
+)
+    return DGFluxFaces(
+        interior,
+        boundary,
+        build_interior_flux_face_colors(interior),
+        build_boundary_flux_face_colors(boundary),
+    )
+end
 
 function build_dg_flux_faces(
     trace_maps::DGTraceMaps,
@@ -58,6 +118,8 @@ function print_flux_face_summary(flux_faces::DGFluxFaces)
     println("-------------")
     println("Number of interior flux faces: ", length(flux_faces.interior))
     println("Number of boundary flux faces: ", length(flux_faces.boundary))
+    println("Interior face colors:          ", length(flux_faces.interior_colors))
+    println("Boundary face colors:          ", length(flux_faces.boundary_colors))
 
     interior_areas = [f.area for f in flux_faces.interior]
     boundary_areas = [f.area for f in flux_faces.boundary]

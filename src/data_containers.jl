@@ -298,13 +298,19 @@ end
 struct DGFluxFaces
     interior::Vector{InteriorFluxFace}
     boundary::Vector{BoundaryFluxFace}
+    interior_colors::Vector{Vector{Int}}
+    boundary_colors::Vector{Vector{Int}}
 end
 
 abstract type AbstractBackend end
 
 struct SerialBackend <: AbstractBackend end
 
-struct ThreadedBackend <: AbstractBackend end
+struct ThreadedBackend <: AbstractBackend
+    maxwell_volume_workspace::Base.RefValue{Any}
+end
+
+ThreadedBackend() = ThreadedBackend(Ref{Any}(nothing))
 
 struct DGDiscretization{B<:AbstractBackend}
     mesh::RawVTUMesh
@@ -452,6 +458,7 @@ end
 
 struct DGPeriodicFluxFaces
     faces::Vector{PeriodicFluxFace}
+    colors::Vector{Vector{Int}}
 end
 
 struct ElementSizeDiagnostics
